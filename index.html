@@ -28,8 +28,20 @@
 <script type="text/babel">
 const { useState, useEffect, useRef, useCallback } = React;
 
-// ─── CONSTANTS ──────────────────────────────────────────────
-const API = 'http://localhost:8000';
+// ─── CONSTANTS & API RESOLUTION ─────────────────────────────
+const BACKEND_URL_KEY = 'stocksim_backend_url';
+function getApiBase() {
+  const custom = localStorage.getItem(BACKEND_URL_KEY);
+  if (custom) return custom.replace(/\/+$/, '');
+  // If hosted on localhost or same origin as backend
+  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    return 'http://localhost:8000';
+  }
+  // If hosted on GitHub Pages or external domain without custom URL, default to localhost:8000
+  return 'http://localhost:8000';
+}
+let API = getApiBase();
+
 const ICONS  = { NVDA:'fa-microchip', AAPL:'fa-apple-whole', TSLA:'fa-car',
                  MSFT:'fa-windows', AMZN:'fa-box', GOOGL:'fa-magnifying-glass' };
 const COLORS = { NVDA:'#76b900', AAPL:'#a2aaad', TSLA:'#cc0000',
@@ -48,7 +60,13 @@ async function api(path, opts={}) {
   const headers = { 'Content-Type':'application/json', ...(opts.headers||{}) };
   const token = getToken();
   if (token) headers['Authorization'] = 'Bearer ' + token;
-  const res = await fetch(API + path, { ...opts, headers });
+  const baseUrl = getApiBase();
+  const res = await fetch(baseUrl + path, { ...opts, headers }).catch(err => {
+    if (window.location.hostname.endsWith('github.io') && baseUrl.includes('localhost')) {
+      throw new Error(`Cannot reach backend at ${baseUrl}. GitHub Pages runs statically in your browser while the FastAPI + PostgreSQL backend runs on your machine. Start backend.py or configure a live backend URL.`);
+    }
+    throw new Error(`Failed to connect to backend at ${baseUrl}: ` + err.message);
+  });
   const data = await res.json().catch(() => ({}));
   if (res.status === 401 && path !== '/login') { clearAuth(); window.location.reload(); }
   if (!res.ok) throw new Error(data.detail || 'Request failed');
@@ -197,8 +215,9 @@ function Login({ onLogin }) {
   const [email, setE] = useState('');
   const [password, setP] = useState('');
   const [customCash, setCustomCash] = useState('50000');
-  const [err, setErr] = useState('');
-  const [busy, setBusy] = useState(false);
+  const [customUrl, setCustomUrl]   = useState(localStorage.getItem(BACKEND_URL_KEY) || '');
+  const [err, setErr]               = useState('');
+  const [busy, setBusy]             = useState(false);
 
   const submit = async (e) => {
     e.preventDefault();
@@ -276,6 +295,25 @@ function Login({ onLogin }) {
               className="btn py-2 bg-slate-800 hover:bg-slate-700 text-slate-200">Trader: navdeep</button>
             <button type="button" onClick={() => fill('admin_exchange', 'admin123')}
               className="btn py-2 bg-slate-800 hover:bg-slate-700 text-amber-300">Admin: admin_exchange</button>
+          </div>
+        </div>
+
+        <div className="mt-4 pt-3 border-t border-slate-800/60 text-[11px]">
+          <div className="flex items-center justify-between text-slate-500">
+            <span>API Server:</span>
+            <span className="font-mono text-cyan-400">{getApiBase()}</span>
+          </div>
+          <div className="mt-2 flex gap-1.5">
+            <input type="text" placeholder="Custom API URL (e.g. http://localhost:8000)"
+              value={customUrl} onChange={e => setCustomUrl(e.target.value)}
+              className="flex-1 bg-slate-900 border border-slate-800 rounded px-2 py-1 text-slate-300 text-[10px] font-mono focus:outline-none focus:border-cyan-500" />
+            <button type="button" onClick={() => {
+              if (customUrl) localStorage.setItem(BACKEND_URL_KEY, customUrl.trim());
+              else localStorage.removeItem(BACKEND_URL_KEY);
+              window.location.reload();
+            }} className="btn px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px]">
+              Set
+            </button>
           </div>
         </div>
       </div>
