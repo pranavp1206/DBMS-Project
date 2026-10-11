@@ -12,6 +12,8 @@ import psycopg2
 from dotenv import load_dotenv
 
 def init_db():
+
+    
     env_path = Path(__file__).resolve().parent / ".env"
     load_dotenv(dotenv_path=env_path)
 
@@ -21,15 +23,12 @@ def init_db():
     db_user = os.getenv("DB_USER", "postgres")
     db_pass = os.getenv("DB_PASSWORD", "")
 
-    print(f"Connecting to PostgreSQL ({db_host}:{db_port}/{db_name}) as {db_user}...")
-    conn = psycopg2.connect(
-        host=db_host,
-        port=db_port,
-        dbname=db_name,
-        user=db_user,
-        password=db_pass
-    )
-    conn.autocommit = True
+    database_url = os.getenv("DATABASE_URL")
+    if database_url:
+        conn = psycopg2.connect(database_url)
+    else:
+        conn = psycopg2.connect(host=db_host, port=db_port, dbname=db_name,
+                                user=db_user, password=db_pass)
     cur = conn.cursor()
 
     schema_file = Path(__file__).resolve().parent / "schema.sql"

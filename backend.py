@@ -26,6 +26,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # ─── DB CONNECTION POOL ─────────────────────────────────────
+DATABASE_URL = os.getenv("DATABASE_URL")
 DB_CONFIG = {
     "host":     os.getenv("DB_HOST", "localhost"),
     "port":     int(os.getenv("DB_PORT", "5432")),
@@ -35,14 +36,16 @@ DB_CONFIG = {
 }
 
 try:
-    pool = psycopg2.pool.ThreadedConnectionPool(1, 15, **DB_CONFIG)
+    if DATABASE_URL:
+        pool = psycopg2.pool.ThreadedConnectionPool(1, 15, dsn=DATABASE_URL)
+    else:
+        pool = psycopg2.pool.ThreadedConnectionPool(1, 15, **DB_CONFIG)
     DB_AVAILABLE = True
-    print("Connected to PostgreSQL:", DB_CONFIG["dbname"])
+    print("Connected to PostgreSQL")
 except Exception as e:
     pool = None
     DB_AVAILABLE = False
     print("PostgreSQL unavailable:", e)
-
 
 @contextmanager
 def get_conn():
