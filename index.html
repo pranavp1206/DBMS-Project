@@ -1,1366 +1,1267 @@
 <!DOCTYPE html>
-<html lang="en" class="dark">
+<html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>PostgreEx — PostgreSQL Stock Exchange & Trading Simulator</title>
-  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📈</text></svg>" />
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      darkMode: 'class',
-      theme: {
-        extend: {
-          fontFamily: {
-            sans: ['Inter', 'sans-serif'],
-            mono: ['JetBrains Mono', 'monospace'],
-          }
-        }
-      }
-    }
-  </script>
-  <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
-  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-
-  <style>
-    *, *::before, *::after { box-sizing: border-box; }
-    body { background: #050810; color: #f1f5f9; font-family: 'Inter', sans-serif; margin: 0; overflow-x: hidden; }
-
-    /* Animated background grid */
-    body::before {
-      content: '';
-      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-      background-image:
-        linear-gradient(rgba(56,189,248,0.03) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(56,189,248,0.03) 1px, transparent 1px);
-      background-size: 60px 60px;
-      z-index: 0;
-      pointer-events: none;
-    }
-
-    /* Ambient glow blobs */
-    .ambient-glow-1 {
-      position: fixed; top: -200px; right: -200px; width: 600px; height: 600px;
-      background: radial-gradient(circle, rgba(56,189,248,0.06) 0%, transparent 70%);
-      border-radius: 50%; z-index: 0; pointer-events: none;
-      animation: floatBlob 20s ease-in-out infinite;
-    }
-    .ambient-glow-2 {
-      position: fixed; bottom: -150px; left: -150px; width: 500px; height: 500px;
-      background: radial-gradient(circle, rgba(16,185,129,0.05) 0%, transparent 70%);
-      border-radius: 50%; z-index: 0; pointer-events: none;
-      animation: floatBlob 25s ease-in-out infinite reverse;
-    }
-    @keyframes floatBlob {
-      0%, 100% { transform: translate(0,0) scale(1); }
-      33% { transform: translate(30px, -30px) scale(1.05); }
-      66% { transform: translate(-20px, 20px) scale(0.95); }
-    }
-
-    ::-webkit-scrollbar { width: 5px; height: 5px; }
-    ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 10px; }
-    ::-webkit-scrollbar-thumb:hover { background: #334155; }
-
-    .glass {
-      background: rgba(15, 23, 42, 0.6);
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
-      border: 1px solid rgba(255,255,255,0.06);
-    }
-    .glass-hover { transition: all 0.3s cubic-bezier(0.4,0,0.2,1); }
-    .glass-hover:hover {
-      border-color: rgba(56,189,248,0.25);
-      box-shadow: 0 0 30px -5px rgba(56,189,248,0.1), inset 0 1px 0 rgba(255,255,255,0.04);
-      transform: translateY(-1px);
-    }
-
-    @keyframes ticker { 0%{transform:translateX(0)}100%{transform:translateX(-50%)} }
-    .animate-ticker { animation: ticker 40s linear infinite; }
-    .animate-ticker:hover { animation-play-state: paused; }
-
-    @keyframes slideUp { from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)} }
-    @keyframes fadeIn { from{opacity:0}to{opacity:1} }
-    @keyframes slideInRight { from{opacity:0;transform:translateX(30px)}to{opacity:1;transform:translateX(0)} }
-    @keyframes pulseGlow { 0%,100%{box-shadow:0 0 5px rgba(16,185,129,0.3)}50%{box-shadow:0 0 20px rgba(16,185,129,0.6)} }
-    @keyframes numberPop { 0%{transform:scale(1)}50%{transform:scale(1.15)}100%{transform:scale(1)} }
-    @keyframes shimmer {
-      0% { background-position: -200% center; }
-      100% { background-position: 200% center; }
-    }
-    @keyframes borderPulse {
-      0%,100% { border-color: rgba(56,189,248,0.2); }
-      50% { border-color: rgba(56,189,248,0.5); }
-    }
-
-    .slide-up { animation: slideUp 0.5s cubic-bezier(0.16,1,0.3,1) forwards; }
-    .fade-in { animation: fadeIn 0.4s ease forwards; }
-    .slide-in-right { animation: slideInRight 0.4s cubic-bezier(0.16,1,0.3,1) forwards; }
-
-    .price-flash-up { animation: flashUp 0.6s ease-out; }
-    .price-flash-down { animation: flashDown 0.6s ease-out; }
-    @keyframes flashUp { 0%{background:rgba(16,185,129,0.3)}100%{background:transparent} }
-    @keyframes flashDown { 0%{background:rgba(244,63,94,0.3)}100%{background:transparent} }
-
-    .neon-text-cyan { text-shadow: 0 0 10px rgba(56,189,248,0.5), 0 0 30px rgba(56,189,248,0.2); }
-    .neon-text-green { text-shadow: 0 0 10px rgba(16,185,129,0.5), 0 0 30px rgba(16,185,129,0.2); }
-    .neon-text-rose { text-shadow: 0 0 10px rgba(244,63,94,0.5), 0 0 30px rgba(244,63,94,0.2); }
-
-    .btn-glow-green {
-      position: relative; overflow: hidden;
-      box-shadow: 0 0 15px rgba(16,185,129,0.3), inset 0 1px 0 rgba(255,255,255,0.1);
-    }
-    .btn-glow-green::after {
-      content:''; position:absolute; top:0;left:-100%;width:100%;height:100%;
-      background:linear-gradient(90deg,transparent,rgba(255,255,255,0.15),transparent);
-      transition: left 0.5s;
-    }
-    .btn-glow-green:hover::after { left: 100%; }
-
-    .btn-glow-red {
-      position: relative; overflow: hidden;
-      box-shadow: 0 0 15px rgba(244,63,94,0.3), inset 0 1px 0 rgba(255,255,255,0.1);
-    }
-    .btn-glow-red::after {
-      content:''; position:absolute; top:0;left:-100%;width:100%;height:100%;
-      background:linear-gradient(90deg,transparent,rgba(255,255,255,0.15),transparent);
-      transition: left 0.5s;
-    }
-    .btn-glow-red:hover::after { left: 100%; }
-
-    .shimmer-bg {
-      background: linear-gradient(90deg, transparent 0%, rgba(56,189,248,0.08) 50%, transparent 100%);
-      background-size: 200% 100%;
-      animation: shimmer 3s ease-in-out infinite;
-    }
-
-    .depth-bar-bid {
-      background: linear-gradient(90deg, transparent, rgba(16,185,129,0.15));
-      transition: width 0.5s cubic-bezier(0.16,1,0.3,1);
-    }
-    .depth-bar-ask {
-      background: linear-gradient(90deg, transparent, rgba(244,63,94,0.15));
-      transition: width 0.5s cubic-bezier(0.16,1,0.3,1);
-    }
-
-    /* Tab content transition wrapper */
-    .tab-content { animation: slideUp 0.35s cubic-bezier(0.16,1,0.3,1) forwards; }
-
-    /* Particle canvas */
-    #particles-canvas {
-      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-      z-index: 0; pointer-events: none;
-    }
-
-    /* Tooltip */
-    .tooltip-wrapper { position: relative; }
-    .tooltip-wrapper .tooltip-text {
-      visibility: hidden; opacity: 0;
-      position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%);
-      background: #0f172a; border: 1px solid #1e293b; color: #94a3b8;
-      padding: 4px 10px; border-radius: 8px; white-space: nowrap;
-      font-size: 11px; font-family: 'JetBrains Mono', monospace;
-      transition: all 0.2s; z-index: 100;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.4);
-    }
-    .tooltip-wrapper:hover .tooltip-text { visibility: visible; opacity: 1; }
-
-    /* Live dot indicator */
-    .live-dot {
-      width: 6px; height: 6px; border-radius: 50%; background: #10b981;
-      box-shadow: 0 0 6px #10b981;
-      animation: pulseGlow 2s ease-in-out infinite;
-    }
-
-    /* Toast slide-in */
-    @keyframes toastIn { from{transform:translateX(120%);opacity:0}to{transform:translateX(0);opacity:1} }
-    @keyframes toastOut { from{transform:translateX(0);opacity:1}to{transform:translateX(120%);opacity:0} }
-    .toast-enter { animation: toastIn 0.4s cubic-bezier(0.16,1,0.3,1) forwards; }
-    .toast-exit { animation: toastOut 0.3s ease-in forwards; }
-
-    /* Order row hover ripple */
-    .order-row {
-      transition: all 0.2s;
-      cursor: pointer;
-    }
-    .order-row:hover {
-      background: rgba(56,189,248,0.05);
-      transform: scale(1.01);
-    }
-
-    /* Number counter animation */
-    .counter-animate {
-      transition: all 0.3s cubic-bezier(0.16,1,0.3,1);
-    }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>StockSim — Group B14 | 23CSE202</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📈</text></svg>">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<script>tailwind.config={darkMode:'class',theme:{extend:{fontFamily:{sans:['Inter','sans-serif'],mono:['JetBrains Mono','monospace']}}}}</script>
+<script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<style>
+  body { background:#0b0f18; color:#e2e8f0; font-family:'Inter',sans-serif; margin:0; }
+  ::-webkit-scrollbar { width:8px; height:8px; }
+  ::-webkit-scrollbar-thumb { background:#334155; border-radius:4px; }
+  .card { background:#111827; border:1px solid #1f2937; border-radius:10px; }
+  .btn { border-radius:8px; font-weight:600; cursor:pointer; transition:background .15s; }
+  .btn:disabled { opacity:.5; cursor:not-allowed; }
+  input { font-family:inherit; }
+  table { border-collapse:collapse; }
+</style>
 </head>
-<body class="min-h-screen antialiased selection:bg-cyan-500/40 selection:text-white">
-  <!-- Ambient Glow Blobs -->
-  <div class="ambient-glow-1"></div>
-  <div class="ambient-glow-2"></div>
+<body class="min-h-screen"><div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useRef, useCallback } = React;
 
-  <!-- Particle Canvas -->
-  <canvas id="particles-canvas"></canvas>
+// ─── CONSTANTS ──────────────────────────────────────────────
+const API = 'http://localhost:8000';
+const ICONS  = { NVDA:'fa-microchip', AAPL:'fa-apple-whole', TSLA:'fa-car',
+                 MSFT:'fa-windows', AMZN:'fa-box', GOOGL:'fa-magnifying-glass' };
+const COLORS = { NVDA:'#76b900', AAPL:'#a2aaad', TSLA:'#cc0000',
+                 MSFT:'#00a4ef', AMZN:'#ff9900', GOOGL:'#4285f4' };
 
-  <div id="root"></div>
+const TOKEN_KEY='stocksim_token', USER_KEY='stocksim_user';
+const getToken=()=>localStorage.getItem(TOKEN_KEY);
+const setToken=t=>localStorage.setItem(TOKEN_KEY,t);
+const clearAuth=()=>{localStorage.removeItem(TOKEN_KEY);localStorage.removeItem(USER_KEY)};
+const cachedUser=()=>{try{return JSON.parse(localStorage.getItem(USER_KEY)||'null')}catch{return null}};
 
-  <script>
-    // Floating particles background
-    (function() {
-      const canvas = document.getElementById('particles-canvas');
-      const ctx = canvas.getContext('2d');
-      let particles = [];
-      const PARTICLE_COUNT = 40;
+const fmt=(n,d=2)=>Number(n||0).toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d});
 
-      function resize() {
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
-      }
-      window.addEventListener('resize', resize);
-      resize();
+// ─── API WRAPPER ────────────────────────────────────────────
+async function api(path, opts={}) {
+  const headers = { 'Content-Type':'application/json', ...(opts.headers||{}) };
+  const token = getToken();
+  if (token) headers['Authorization'] = 'Bearer ' + token;
+  const res = await fetch(API + path, { ...opts, headers });
+  const data = await res.json().catch(() => ({}));
+  if (res.status === 401 && path !== '/login') { clearAuth(); window.location.reload(); }
+  if (!res.ok) throw new Error(data.detail || 'Request failed');
+  return data;
+}
 
-      for (let i = 0; i < PARTICLE_COUNT; i++) {
-        particles.push({
-          x: Math.random() * canvas.width,
-          y: Math.random() * canvas.height,
-          vx: (Math.random() - 0.5) * 0.3,
-          vy: (Math.random() - 0.5) * 0.3,
-          r: Math.random() * 1.5 + 0.5,
-          alpha: Math.random() * 0.3 + 0.05
-        });
-      }
+// ─── APP ────────────────────────────────────────────────────
+function App() {
+  const [user, setUser] = useState(cachedUser());
+  const [tab, setTab] = useState('terminal');
+  const [selId, setSelId] = useState('NVDA');
+  const [toast, setToast] = useState(null);
+  const [stocks, setStocks] = useState([]);
+  const [portfolio, setPortfolio] = useState([]);
+  const [trades, setTrades] = useState([]);
+  const [orders, setOrders] = useState([]);
+  const [dbOnline, setDbOnline] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
 
-      function animate() {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        particles.forEach(p => {
-          p.x += p.vx;
-          p.y += p.vy;
-          if (p.x < 0) p.x = canvas.width;
-          if (p.x > canvas.width) p.x = 0;
-          if (p.y < 0) p.y = canvas.height;
-          if (p.y > canvas.height) p.y = 0;
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-          ctx.fillStyle = `rgba(56, 189, 248, ${p.alpha})`;
-          ctx.fill();
-        });
+  const showToast = useCallback((title, msg, type='INFO') => {
+    setToast({ title, msg, type });
+    setTimeout(() => setToast(null), 3500);
+  }, []);
 
-        // Draw faint connecting lines between nearby particles
-        for (let i = 0; i < particles.length; i++) {
-          for (let j = i + 1; j < particles.length; j++) {
-            const dx = particles[i].x - particles[j].x;
-            const dy = particles[i].y - particles[j].y;
-            const dist = Math.sqrt(dx*dx + dy*dy);
-            if (dist < 120) {
-              ctx.beginPath();
-              ctx.moveTo(particles[i].x, particles[i].y);
-              ctx.lineTo(particles[j].x, particles[j].y);
-              ctx.strokeStyle = `rgba(56, 189, 248, ${0.04 * (1 - dist/120)})`;
-              ctx.lineWidth = 0.5;
-              ctx.stroke();
-            }
-          }
-        }
-        requestAnimationFrame(animate);
-      }
-      animate();
-    })();
-  </script>
-
-  <script type="text/babel">
-    const { useState, useEffect, useRef, useMemo, useCallback } = React;
-
-    // ═══════════════════════════════════════════════════════════
-    //  MOCK DATA & SEED
-    // ═══════════════════════════════════════════════════════════
-    const STOCK_ICONS = {
-      NVDA: 'fa-microchip', AAPL: 'fa-apple-whole', TSLA: 'fa-car', MSFT: 'fa-windows',
-      AMZN: 'fa-box', GOOGL: 'fa-magnifying-glass'
-    };
-    const STOCK_COLORS = {
-      NVDA: '#76b900', AAPL: '#a2aaad', TSLA: '#cc0000', MSFT: '#00a4ef',
-      AMZN: '#ff9900', GOOGL: '#4285f4'
-    };
-
-    const INITIAL_STOCKS = [
-      { id:'NVDA',name:'NVIDIA Corporation',sector:'Technology / AI',price:128.50,prevClose:124.10,high:130.20,low:123.80,volume:854000,marketCap:'$3.16T',availableShares:450 },
-      { id:'AAPL',name:'Apple Inc.',sector:'Consumer Electronics',price:224.30,prevClose:221.50,high:225.80,low:220.10,volume:642000,marketCap:'$3.44T',availableShares:600 },
-      { id:'TSLA',name:'Tesla, Inc.',sector:'Automotive / EV',price:210.80,prevClose:218.40,high:220.00,low:208.50,volume:1120000,marketCap:'$670B',availableShares:15 },
-      { id:'MSFT',name:'Microsoft Corp',sector:'Cloud & Software',price:448.20,prevClose:445.00,high:450.50,low:443.20,volume:410000,marketCap:'$3.33T',availableShares:300 },
-      { id:'AMZN',name:'Amazon.com Inc.',sector:'E-Commerce / Cloud',price:186.40,prevClose:184.20,high:187.90,low:183.50,volume:530000,marketCap:'$1.94T',availableShares:400 },
-      { id:'GOOGL',name:'Alphabet Inc.',sector:'Internet & AI',price:174.90,prevClose:176.50,high:177.20,low:173.80,volume:390000,marketCap:'$2.18T',availableShares:500 }
-    ];
-
-    const INITIAL_USER = {
-      id:'usr_demo', name:'Alex Mercer',
-      cashBalance: 50000.00,
-      portfolio: { NVDA:{shares:20,avgBuyPrice:120.00}, AAPL:{shares:15,avgBuyPrice:215.00}, MSFT:{shares:5,avgBuyPrice:430.00} }
-    };
-
-    function generateHistory(stocks) {
-      const h = {}; const now = Date.now();
-      stocks.forEach(s => {
-        const pts = []; let c = s.price;
-        for (let i = 30; i >= 0; i--) {
-          c = Math.max(1, c + (Math.random()-0.49)*(c*0.007));
-          pts.push({ stockId:s.id, price:+c.toFixed(2), timestamp: new Date(now-i*30000).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'}) });
-        }
-        h[s.id] = pts;
-      });
-      return h;
+  useEffect(() => {
+    if (!user) return;
+    let cancel = false;
+    async function tick() {
+      try {
+        const [h, s, p, t, o] = await Promise.all([
+          api('/health').catch(() => ({ db:false })),
+          api('/stocks').catch(() => []),
+          api('/me/portfolio').catch(() => []),
+          api('/me/trades?limit=15').catch(() => []),
+          api('/me/orders').catch(() => []),
+        ]);
+        if (cancel) return;
+        setDbOnline(h.db);
+        setStocks(s); setPortfolio(p); setTrades(t); setOrders(o);
+      } catch {}
     }
+    tick();
+    const iv = setInterval(tick, 2500);
+    return () => { cancel = true; clearInterval(iv); };
+  }, [user, refreshKey]);
 
-    function generateOrderBook(stocks) {
-      const book = {};
-      stocks.forEach(s => {
-        const bids=[], asks=[];
-        for (let i=1;i<=6;i++) {
-          const bp = +(s.price - i*(s.price*0.0025)).toFixed(2);
-          const bq = Math.floor(Math.random()*50)+5;
-          bids.push({price:bp,quantity:bq,total:+(bp*bq).toFixed(2)});
-          const ap = +(s.price + i*(s.price*0.0025)).toFixed(2);
-          const aq = Math.floor(Math.random()*50)+5;
-          asks.push({price:ap,quantity:aq,total:+(ap*aq).toFixed(2)});
-        }
-        bids.sort((a,b)=>b.price-a.price);
-        asks.sort((a,b)=>a.price-b.price);
-        book[s.id]={bids,asks};
-      });
-      return book;
-    }
+  useEffect(() => {
+    if (!user) return;
+    const iv = setInterval(async () => {
+      try {
+        const me = await api('/me');
+        setUser(me);
+        localStorage.setItem(USER_KEY, JSON.stringify(me));
+      } catch {}
+    }, 3000);
+    return () => clearInterval(iv);
+  }, [user]);
 
-    // ═══════════════════════════════════════════════════════════
-    //  DATABASE ENGINE (PostgreSQL Simulation)
-    // ═══════════════════════════════════════════════════════════
-    class DatabaseEngine {
-      constructor() {
-        this.stocks=[...INITIAL_STOCKS];
-        this.user=JSON.parse(JSON.stringify(INITIAL_USER));
-        this.priceHistory=generateHistory(this.stocks);
-        this.orderBook=generateOrderBook(this.stocks);
-        this.trades=[];
-        this.logs=[];
-        this.activeLocks=new Set();
-        this.listeners=new Set();
-        this.botEnabled=true;
-        this.addLog('SYSTEM','PostgreSQL Exchange Engine initialized — Isolation Level: READ COMMITTED');
-        this.addLog('TRIGGER','Registered AFTER INSERT ON Trades → trg_update_portfolio_on_trade');
-        this.addLog('TRIGGER','Registered AFTER INSERT ON Trades → trg_record_price_history');
-      }
-      subscribe(fn){this.listeners.add(fn);return()=>this.listeners.delete(fn)}
-      notify(){this.listeners.forEach(fn=>fn())}
-      addLog(type,msg,dur=1.2){
-        this.logs.unshift({id:'l_'+Math.random().toString(36).substr(2,7),timestamp:new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit',fractionalSecondDigits:3}),type,message:msg,durationMs:dur});
-        if(this.logs.length>100)this.logs.pop();
-        this.notify();
-      }
-      queryRank(){
-        const items=this.stocks.map(s=>{const c=s.price-s.prevClose;return{...s,change:c,pctChange:(c/s.prevClose)*100}});
-        const g=[...items].sort((a,b)=>b.pctChange-a.pctChange);
-        g.forEach((x,i)=>x.rankGainer=i+1);
-        return{gainers:g};
-      }
-      queryRollingAvg(sid){
-        const pts=this.priceHistory[sid]||[];
-        return pts.map((pt,i,arr)=>{
-          const prev=i>0?arr[i-1].price:pt.price;
-          const lagDiff=+(pt.price-prev).toFixed(2);
-          const s5=arr.slice(Math.max(0,i-4),i+1);
-          const ma5=+(s5.reduce((a,x)=>a+x.price,0)/s5.length).toFixed(2);
-          const s20=arr.slice(Math.max(0,i-19),i+1);
-          const ma20=+(s20.reduce((a,x)=>a+x.price,0)/s20.length).toFixed(2);
-          return{...pt,prevPrice:prev,lagDiff,ma5,ma20};
-        });
-      }
-      executeOrder({stockId,type,orderType,price,quantity}){
-        const cost=price*quantity;
-        const stock=this.stocks.find(s=>s.id===stockId);
-        if(!stock)return{success:false,error:'Symbol not found.'};
-        this.addLog('TRANSACTION','BEGIN TRANSACTION ISOLATION LEVEL READ COMMITTED;');
-        this.addLog('SQL',`SELECT * FROM stocks WHERE id = '${stockId}' FOR UPDATE;`);
-        this.activeLocks.add(stockId);
-        try{
-          if(type==='BUY'){
-            if(this.user.cashBalance<cost){this.addLog('SQL',`ROLLBACK; — Insufficient funds ($${this.user.cashBalance.toFixed(2)} < $${cost.toFixed(2)})`);this.activeLocks.delete(stockId);return{success:false,error:`Insufficient cash. Need $${cost.toFixed(2)}.`}}
-            if(stock.availableShares<quantity){this.addLog('SQL',`ROLLBACK; — Insufficient liquidity`);this.activeLocks.delete(stockId);return{success:false,error:`Only ${stock.availableShares} shares available.`}}
-          } else {
-            const held=this.user.portfolio[stockId]?.shares||0;
-            if(held<quantity){this.addLog('SQL',`ROLLBACK; — Insufficient position (${held} held)`);this.activeLocks.delete(stockId);return{success:false,error:`You only own ${held} shares.`}}
-          }
-          const tp=orderType==='MARKET'?stock.price:price;
-          const tv=tp*quantity;
-          const tr={id:'trd_'+Math.random().toString(36).substr(2,7),stockId,type,orderType,price:tp,quantity,total:tv,timestamp:new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'})};
-          this.trades.unshift(tr);
-          this.addLog('SQL',`INSERT INTO Trades VALUES ('${tr.id}','${stockId}','${type}',${tp},${quantity},${tv});`);
-          this._triggerPortfolio(stockId,type,quantity,tp);
-          this._triggerPriceHistory(stockId,tp);
-          if(type==='BUY')stock.availableShares-=quantity; else stock.availableShares+=quantity;
-          this.addLog('TRANSACTION',`COMMIT; — Trade #${tr.id} settled ✓`);
-          this.activeLocks.delete(stockId);
-          this.notify();
-          return{success:true,trade:tr};
-        }catch(e){this.addLog('SQL',`ROLLBACK; — ${e.message}`);this.activeLocks.delete(stockId);return{success:false,error:e.message}}
-      }
-      _triggerPortfolio(sid,type,qty,tp){
-        this.addLog('TRIGGER',`trg_update_portfolio_on_trade('${sid}','${type}',${qty},${tp})`);
-        if(type==='BUY'){
-          this.user.cashBalance-=qty*tp;
-          const ex=this.user.portfolio[sid]||{shares:0,avgBuyPrice:0};
-          const ns=ex.shares+qty;
-          const na=((ex.shares*ex.avgBuyPrice)+(qty*tp))/ns;
-          this.user.portfolio[sid]={shares:ns,avgBuyPrice:+na.toFixed(2)};
-        }else{
-          this.user.cashBalance+=qty*tp;
-          const ex=this.user.portfolio[sid];
-          if(ex){ex.shares-=qty;if(ex.shares<=0)delete this.user.portfolio[sid]}
-        }
-      }
-      _triggerPriceHistory(sid,tp){
-        this.addLog('TRIGGER',`trg_record_price_history('${sid}',${tp})`);
-        const s=this.stocks.find(x=>x.id===sid);
-        if(s){s.price=tp;if(tp>s.high)s.high=tp;if(tp<s.low)s.low=tp;s.volume+=Math.floor(Math.random()*40)+10}
-        if(!this.priceHistory[sid])this.priceHistory[sid]=[];
-        this.priceHistory[sid].push({stockId:sid,price:tp,timestamp:new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'})});
-        if(this.priceHistory[sid].length>40)this.priceHistory[sid].shift();
-      }
-      async simulateRace(sid='TSLA'){
-        const s=this.stocks.find(x=>x.id===sid);
-        const avail=s?s.availableShares:5;
-        this.addLog('SYSTEM',`══════ RACE CONDITION: 2 Threads → ${avail} ${sid} Shares ══════`);
-        this.addLog('SQL',`[Thread 1] BEGIN; SELECT * FROM stocks WHERE id='${sid}' FOR UPDATE; — Lock ACQUIRED ✓`);
-        this.activeLocks.add(sid);
-        this.addLog('SQL',`[Thread 2] BEGIN; SELECT * FROM stocks WHERE id='${sid}' FOR UPDATE; — BLOCKED ⏳ Waiting...`);
-        this.notify();
-        await new Promise(r=>setTimeout(r,900));
-        const r1=this.executeOrder({stockId:sid,type:'BUY',orderType:'MARKET',price:s.price,quantity:Math.max(1,avail)});
-        this.addLog('SYSTEM','[Thread 1] Committed & Released lock ✓');
-        this.notify();
-        await new Promise(r=>setTimeout(r,700));
-        this.addLog('SQL','[Thread 2] Lock acquired! Checking available shares...');
-        const rem=s.availableShares;
-        let r2;
-        if(rem<10){
-          this.addLog('SQL',`[Thread 2] ROLLBACK; — Insufficient supply after Thread 1 commit (${rem} remaining)`);
-          r2={success:false,error:`Concurrent Order Failed: Only ${rem} shares remain. Atomic Rollback.`};
-        }else{
-          r2=this.executeOrder({stockId:sid,type:'BUY',orderType:'MARKET',price:s.price,quantity:10});
-        }
-        this.notify();
-        return{thread1:r1,thread2:r2};
-      }
-      tickBot(){
-        if(!this.botEnabled)return;
-        const s=this.stocks[Math.floor(Math.random()*this.stocks.length)];
-        const pct=(Math.random()-0.48)*0.01;
-        const np=+(s.price*(1+pct)).toFixed(2);
-        if(np>0)this._triggerPriceHistory(s.id,np);
-        // Update orderbook
-        const ob=this.orderBook[s.id];
-        if(ob){
-          ob.bids=ob.bids.map((b,i)=>{const p=+(np-(i+1)*(np*0.0025)).toFixed(2);const q=Math.floor(Math.random()*50)+5;return{price:p,quantity:q,total:+(p*q).toFixed(2)}});
-          ob.asks=ob.asks.map((a,i)=>{const p=+(np+(i+1)*(np*0.0025)).toFixed(2);const q=Math.floor(Math.random()*50)+5;return{price:p,quantity:q,total:+(p*q).toFixed(2)}});
-        }
-      }
-      addStock(d){
-        this.addLog('SQL',`INSERT INTO stocks VALUES ('${d.id}','${d.name}','${d.sector}',${d.price});`);
-        const ns={...d,prevClose:d.price,high:d.price,low:d.price,volume:0,availableShares:300,marketCap:'N/A'};
-        this.stocks.push(ns);
-        this.priceHistory[d.id]=[{stockId:d.id,price:d.price,timestamp:new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'})}];
-        this.orderBook[d.id]=generateOrderBook([ns])[d.id];
-        this.notify();
-      }
-      marketShock(type){
-        const m=type==='BULL'?1.08:type==='CRASH'?0.90:(Math.random()>0.5?1.12:0.85);
-        this.addLog('SYSTEM',`⚡ ADMIN Market Shock: ${type} (×${m.toFixed(2)})`);
-        this.stocks.forEach(s=>this._triggerPriceHistory(s.id,+(s.price*m).toFixed(2)));
-        this.notify();
-      }
-    }
-    const db = new DatabaseEngine();
+  if (!user) return <Login onLogin={u => { setUser(u); localStorage.setItem(USER_KEY, JSON.stringify(u)); }} />;
 
-    // ═══════════════════════════════════════════════════════════
-    //  ANIMATED COUNTER COMPONENT
-    // ═══════════════════════════════════════════════════════════
-    function AnimatedNumber({ value, prefix='', suffix='', decimals=2, className='' }) {
-      const [display, setDisplay] = useState(value);
-      const prevRef = useRef(value);
-      const [flash, setFlash] = useState('');
+  const sel = stocks.find(s => s.stock_id === selId) || stocks[0];
 
-      useEffect(() => {
-        if (value !== prevRef.current) {
-          setFlash(value > prevRef.current ? 'text-emerald-400' : 'text-rose-400');
-          setTimeout(() => setFlash(''), 600);
-        }
-        prevRef.current = value;
+  const placeOrder = async (data) => {
+    try {
+      const r = await api('/orders', { method:'POST', body:JSON.stringify(data) });
+      const msg = r.filled_qty > 0
+        ? (r.residual_qty > 0 ? `${r.filled_qty} filled, ${r.residual_qty} resting in book` : `All ${r.filled_qty} shares filled! Added to portfolio.`)
+        : `${r.residual_qty} shares placed in order book (waiting for a matching counterparty)`;
+      showToast(r.filled_qty > 0 ? 'Order Filled' : 'Order Resting in Book', msg, r.filled_qty > 0 ? 'SUCCESS' : 'INFO');
+      setRefreshKey(k => k + 1);
+    } catch (e) { showToast('Order Failed', e.message, 'ERROR'); }
+  };
 
-        let start = display;
-        const end = value;
-        const diff = end - start;
-        const steps = 12;
-        let step = 0;
-        const timer = setInterval(() => {
-          step++;
-          const progress = step / steps;
-          const eased = 1 - Math.pow(1 - progress, 3);
-          setDisplay(start + diff * eased);
-          if (step >= steps) { clearInterval(timer); setDisplay(end); }
-        }, 25);
-        return () => clearInterval(timer);
-      }, [value]);
+  const cancelOrder = async (id) => {
+    try {
+      await api('/orders/' + id, { method:'DELETE' });
+      showToast('Cancelled', `Order #${id} released`, 'SUCCESS');
+      setRefreshKey(k => k + 1);
+    } catch (e) { showToast('Failed', e.message, 'ERROR'); }
+  };
 
-      return (
-        <span className={`counter-animate font-mono ${flash || className}`}>
-          {prefix}{typeof display === 'number' ? display.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals }) : display}{suffix}
-        </span>
-      );
-    }
+  const raceTest = async () => {
+    setTab('analytics');
+    showToast('Race Test', 'Two barrier-synced buyers...');
+    try {
+      const r = await api('/simulate/race?stock_id=TSLA', { method:'POST' });
+      if (r.thread2 && !r.thread2.success)
+        showToast('Race Prevented', r.thread2.error, 'SUCCESS');
+      else showToast('Test Complete', 'See SQL log for details', 'INFO');
+      setRefreshKey(k => k + 1);
+    } catch (e) { showToast('Race Test Failed', e.message, 'ERROR'); }
+  };
 
-    // ═══════════════════════════════════════════════════════════
-    //  MAIN APP
-    // ═══════════════════════════════════════════════════════════
-    function App() {
-      const [,setTick]=useState(0);
-      const [tab,setTab]=useState('terminal');
-      const [selId,setSelId]=useState('NVDA');
-      const [botOn,setBotOn]=useState(true);
-      const [toast,setToast]=useState(null);
-      const [toastExiting,setToastExiting]=useState(false);
+  const logout = async () => {
+    try { await api('/logout', { method:'POST' }); } catch {}
+    clearAuth(); window.location.reload();
+  };
 
-      useEffect(()=>db.subscribe(()=>setTick(t=>t+1)),[]);
-      useEffect(()=>{
-        db.botEnabled=botOn;
-        const iv=setInterval(()=>db.tickBot(),1800);
-        return()=>clearInterval(iv);
-      },[botOn]);
+  const netWorth = parseFloat(user.cash_balance || 0)
+    + portfolio.reduce((s, h) => s + parseFloat(h.current_value || 0), 0);
 
-      const sel=db.stocks.find(s=>s.id===selId)||db.stocks[0];
-      const wd=db.queryRollingAvg(sel.id);
-
-      const portfolioValue=Object.entries(db.user.portfolio).reduce((sum,[sym,d])=>{
-        const st=db.stocks.find(s=>s.id===sym);
-        return sum+(st?st.price*d.shares:0);
-      },0);
-      const netWorth=db.user.cashBalance+portfolioValue;
-
-      const showToast=(title,msg,type='SUCCESS')=>{
-        setToastExiting(false);
-        setToast({title,msg,type});
-        setTimeout(()=>{setToastExiting(true);setTimeout(()=>setToast(null),350)},3500);
-      };
-
-      const handleOrder=(data)=>{
-        const r=db.executeOrder(data);
-        if(r.success){
-          showToast('Order Settled ✓',`${data.type} ${data.quantity} ${data.stockId} @ $${r.trade.price.toFixed(2)}`,'SUCCESS');
-          if(window.confetti)confetti({particleCount:60,spread:70,origin:{y:0.7},colors:['#10b981','#38bdf8','#fbbf24']});
-        }else showToast('Transaction Rolled Back',r.error,'ERROR');
-      };
-
-      const handleRace=async()=>{
-        setTab('analytics');
-        showToast('Race Condition Test','Spawning 2 concurrent threads...','INFO');
-        const r=await db.simulateRace(sel.id);
-        if(r.thread2&&!r.thread2.success)showToast('Atomic Rollback',r.thread2.error,'ERROR');
-      };
-
-      return (
-        <div className="relative z-10 min-h-screen flex flex-col">
-          {/* ═══ TICKER TAPE ═══ */}
-          <div className="bg-[#050810]/90 backdrop-blur border-b border-slate-800/50 py-1.5 overflow-hidden">
-            <div className="animate-ticker inline-flex space-x-4 text-xs font-mono">
-              {[...db.stocks,...db.stocks,...db.stocks].map((s,i)=>{
-                const chg=s.price-s.prevClose; const up=chg>=0;
-                return(
-                  <div key={i} className="inline-flex items-center space-x-2 bg-slate-900/50 hover:bg-slate-800/60 px-3 py-1 rounded-lg border border-slate-800/50 transition-all cursor-pointer group">
-                    <i className={`fa-solid ${STOCK_ICONS[s.id]||'fa-chart-simple'} text-[10px]`} style={{color:STOCK_COLORS[s.id]||'#38bdf8'}}></i>
-                    <span className="font-bold text-slate-200 group-hover:text-white transition-colors">{s.id}</span>
-                    <span className="text-slate-400">${s.price.toFixed(2)}</span>
-                    <span className={`font-bold ${up?'text-emerald-400':'text-rose-400'}`}>
-                      {up?'▲':'▼'} {up?'+':''}{((chg/s.prevClose)*100).toFixed(2)}%
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
+  return (
+    <div className="min-h-screen">
+      <Header user={user} tab={tab} setTab={setTab} dbOnline={dbOnline}
+              onRace={raceTest} onLogout={logout}
+              cash={user.cash_balance} netWorth={netWorth} />
+      <main className="max-w-[1300px] mx-auto px-4 py-5">
+        {stocks.length === 0 ? (
+          <div className="flex items-center justify-center py-20 text-slate-500 text-sm">
+            <i className="fa-solid fa-circle-notch fa-spin text-cyan-400 text-xl mr-2"></i>
+            Loading exchange data...
           </div>
+        ) : (
+          <>
+            {tab === 'terminal' && sel && (
+              <Terminal stocks={stocks} sel={sel} setSelId={setSelId}
+                        portfolio={portfolio} onOrder={placeOrder}
+                        orders={orders} onCancel={cancelOrder} trades={trades} />
+            )}
+            {tab === 'portfolio' && (
+              <Portfolio portfolio={portfolio} cash={user.cash_balance}
+                         setSelId={setSelId} setTab={setTab}
+                         orders={orders} onCancel={cancelOrder}
+                         onCashChange={newBal => {
+                           setUser(u => ({ ...u, cash_balance: newBal }));
+                           setRefreshKey(k => k + 1);
+                         }}
+                         toast={showToast} />
+            )}
+            {tab === 'analytics' && sel && <Analytics sel={sel} />}
+            {tab === 'admin' && user.role === 'admin' && (
+              <Admin stocks={stocks} refresh={() => setRefreshKey(k => k + 1)} toast={showToast} />
+            )}
+          </>
+        )}
+      </main>
+      {toast && <Toast data={toast} close={() => setToast(null)} />}
+    </div>
+  );
+}
 
-          {/* ═══ HEADER ═══ */}
-          <header className="border-b border-slate-800/50 bg-[#0a0f1a]/80 backdrop-blur-xl sticky top-0 z-40 px-4 py-2.5">
-            <div className="max-w-[1400px] mx-auto flex flex-wrap items-center justify-between gap-3">
-              {/* Logo */}
-              <div className="flex items-center space-x-3">
-                <div className="relative">
-                  <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-cyan-500 via-blue-600 to-violet-600 p-[2px] shadow-lg shadow-cyan-500/20">
-                    <div className="w-full h-full bg-[#0a0f1a] rounded-[14px] flex items-center justify-center">
-                      <i className="fa-solid fa-database text-cyan-400 text-sm"></i>
-                    </div>
-                  </div>
-                  <div className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-emerald-500 rounded-full border-2 border-[#0a0f1a] animate-pulse"></div>
-                </div>
-                <div>
-                  <h1 className="font-extrabold text-[17px] text-white tracking-tight flex items-center gap-2">
-                    Postgre<span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-400">Ex</span>
-                    <span className="text-[9px] font-mono uppercase bg-gradient-to-r from-cyan-950 to-blue-950 text-cyan-400 border border-cyan-800/60 px-2 py-0.5 rounded-full font-bold tracking-widest">ACID</span>
-                  </h1>
-                  <div className="flex items-center space-x-1.5 text-[10px] text-slate-500">
-                    <div className="live-dot"></div>
-                    <span>Live Exchange Simulation</span>
-                  </div>
-                </div>
-              </div>
+// ─── LOGIN ──────────────────────────────────────────────────
+function Login({ onLogin }) {
+  const [mode, setMode] = useState('login');
+  const [username, setU] = useState('');
+  const [email, setE] = useState('');
+  const [password, setP] = useState('');
+  const [customCash, setCustomCash] = useState('50000');
+  const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(false);
 
-              {/* Nav Tabs */}
-              <nav className="flex items-center bg-slate-900/60 p-1 rounded-2xl border border-slate-800/60 backdrop-blur">
-                {[
-                  {id:'terminal',icon:'fa-chart-line',label:'Terminal',color:''},
-                  {id:'portfolio',icon:'fa-wallet',label:'Portfolio',color:''},
-                  {id:'analytics',icon:'fa-code-branch',label:'SQL Analytics',color:'text-purple-400'},
-                  {id:'admin',icon:'fa-user-shield',label:'Admin',color:'text-amber-400'}
-                ].map(t=>(
-                  <button key={t.id} onClick={()=>setTab(t.id)}
-                    className={`flex items-center space-x-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all duration-200 ${
-                      tab===t.id
-                        ?'bg-gradient-to-r from-cyan-500/20 to-blue-500/15 text-cyan-300 border border-cyan-500/30 shadow-sm shadow-cyan-500/10'
-                        :'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
-                    }`}>
-                    <i className={`fa-solid ${t.icon} text-[11px] ${tab===t.id?'text-cyan-400':t.color}`}></i>
-                    <span className="hidden sm:inline">{t.label}</span>
-                  </button>
-                ))}
-              </nav>
+  const submit = async (e) => {
+    e.preventDefault();
+    setBusy(true); setErr('');
+    try {
+      const body = mode === 'register'
+        ? { username, email, password, initial_cash: parseFloat(customCash) || 50000 }
+        : { username, password };
+      const r = await api('/' + mode, { method:'POST', body:JSON.stringify(body) });
+      setToken(r.token);
+      onLogin({ user_id:r.user_id, username:r.username, role:r.role, cash_balance:r.cash_balance });
+    } catch (e) { setErr(e.message); setBusy(false); }
+  };
 
-              {/* Action Buttons & Wallet */}
-              <div className="flex items-center space-x-2">
-                <button onClick={handleRace}
-                  className="tooltip-wrapper flex items-center space-x-1.5 px-3 py-1.5 bg-gradient-to-r from-amber-500/15 to-rose-500/15 hover:from-amber-500/25 hover:to-rose-500/25 border border-amber-500/30 text-amber-300 rounded-xl text-xs font-bold transition-all hover:shadow-lg hover:shadow-amber-500/10 active:scale-95">
-                  <i className="fa-solid fa-bolt text-amber-400 animate-pulse"></i>
-                  <span>Race Test</span>
-                  <span className="tooltip-text">Simulate concurrent row-lock race condition</span>
-                </button>
+  const fill = (u, p) => { setU(u); setP(p); };
 
-                <button onClick={()=>setBotOn(!botOn)}
-                  className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all active:scale-95 ${botOn?'bg-emerald-950/50 border-emerald-700/50 text-emerald-300 hover:bg-emerald-900/50':'bg-slate-900/50 border-slate-700 text-slate-500 hover:text-slate-300'}`}>
-                  <i className={`fa-solid ${botOn?'fa-pause':'fa-play'} text-[10px]`}></i>
-                  <span>{botOn?'Bot ON':'Bot OFF'}</span>
-                  {botOn && <div className="live-dot ml-0.5"></div>}
-                </button>
+  return (
+    <div className="min-h-screen flex items-center justify-center px-4">
+      <div className="card p-8 w-full max-w-md">
+        <h1 className="text-2xl font-bold text-white mb-1">StockSim</h1>
+        <p className="text-xs text-slate-500 mb-6">Group B14 · 23CSE202</p>
 
-                {/* Wallet */}
-                <div className="glass rounded-2xl px-4 py-1.5 flex items-center space-x-3 text-[11px] font-mono border border-slate-800/60">
-                  <div>
-                    <div className="text-[9px] text-slate-500 uppercase tracking-wider font-sans font-semibold">Cash</div>
-                    <AnimatedNumber value={db.user.cashBalance} prefix="$" className="text-emerald-400 font-bold neon-text-green" />
-                  </div>
-                  <div className="w-px h-6 bg-gradient-to-b from-transparent via-slate-700 to-transparent"></div>
-                  <div>
-                    <div className="text-[9px] text-slate-500 uppercase tracking-wider font-sans font-semibold">Net Worth</div>
-                    <AnimatedNumber value={netWorth} prefix="$" className="text-cyan-300 font-bold neon-text-cyan" />
-                  </div>
-                </div>
-              </div>
-            </div>
-          </header>
-
-          {/* ═══ MAIN CONTENT ═══ */}
-          <main className="flex-1 max-w-[1400px] w-full mx-auto px-4 py-5">
-            <div key={tab} className="tab-content">
-              {tab==='terminal' && <TerminalView sel={sel} setSelId={setSelId} db={db} wd={wd} onOrder={handleOrder} />}
-              {tab==='portfolio' && <PortfolioView user={db.user} stocks={db.stocks} onOrder={handleOrder} setSelId={setSelId} setTab={setTab} />}
-              {tab==='analytics' && <AnalyticsView db={db} sel={sel} />}
-              {tab==='admin' && <AdminView db={db} />}
-            </div>
-          </main>
-
-          {/* ═══ TOAST ═══ */}
-          {toast && (
-            <div className={`fixed bottom-5 right-5 z-50 max-w-sm w-full ${toastExiting?'toast-exit':'toast-enter'}`}>
-              <div className={`glass p-4 rounded-2xl flex items-start space-x-3 shadow-2xl border ${
-                toast.type==='SUCCESS'?'border-emerald-500/40 shadow-emerald-500/10':
-                toast.type==='ERROR'?'border-rose-500/40 shadow-rose-500/10':
-                'border-cyan-500/40 shadow-cyan-500/10'
-              }`}>
-                <div className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 ${
-                  toast.type==='SUCCESS'?'bg-emerald-500/20':'bg-rose-500/20'
-                }`}>
-                  <i className={`fa-solid ${toast.type==='SUCCESS'?'fa-check text-emerald-400':toast.type==='ERROR'?'fa-xmark text-rose-400':'fa-info text-cyan-400'}`}></i>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h4 className="font-bold text-sm text-white">{toast.title}</h4>
-                  <p className="text-xs text-slate-400 mt-0.5 leading-relaxed">{toast.msg}</p>
-                </div>
-                <button onClick={()=>{setToastExiting(true);setTimeout(()=>setToast(null),300)}} className="text-slate-500 hover:text-white transition-colors">
-                  <i className="fa-solid fa-xmark text-xs"></i>
-                </button>
-              </div>
-            </div>
-          )}
+        <div className="flex mb-5 bg-slate-900 rounded-lg p-1 text-xs">
+          <button onClick={() => setMode('login')}
+            className={`flex-1 py-2 rounded-md ${mode === 'login' ? 'bg-cyan-600 text-white' : 'text-slate-400'}`}>Login</button>
+          <button onClick={() => setMode('register')}
+            className={`flex-1 py-2 rounded-md ${mode === 'register' ? 'bg-cyan-600 text-white' : 'text-slate-400'}`}>Register</button>
         </div>
-      );
-    }
 
-    // ═══════════════════════════════════════════════════════════
-    //  TERMINAL VIEW
-    // ═══════════════════════════════════════════════════════════
-    function TerminalView({ sel, setSelId, db, wd, onOrder }) {
-      return (
-        <div className="space-y-5">
-          {/* Stock Selector & Overview Banner */}
-          <div className="glass glass-hover rounded-2xl p-5 shadow-xl">
-            {/* Selector Pills */}
-            <div className="flex items-center space-x-2 overflow-x-auto pb-3 mb-4 border-b border-slate-800/60 font-mono text-xs">
-              <span className="text-slate-500 font-sans uppercase text-[10px] font-bold tracking-widest mr-2 flex items-center space-x-1">
-                <i className="fa-solid fa-layer-group text-cyan-500"></i><span>Markets</span>
-              </span>
-              {db.stocks.map(s=>{
-                const isSel=s.id===sel.id; const chg=s.price-s.prevClose; const up=chg>=0;
-                return(
-                  <button key={s.id} onClick={()=>setSelId(s.id)}
-                    className={`px-3 py-1.5 rounded-xl font-bold flex items-center space-x-2 transition-all duration-200 active:scale-95 ${
-                      isSel?'bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-lg shadow-cyan-600/20 ring-1 ring-cyan-400/40 scale-105'
-                      :'bg-slate-900/60 text-slate-400 hover:text-white hover:bg-slate-800/80 border border-slate-800/60'
-                    }`}>
-                    <i className={`fa-solid ${STOCK_ICONS[s.id]||'fa-chart-simple'} text-[10px]`} style={isSel?{}:{color:STOCK_COLORS[s.id]}}></i>
-                    <span>{s.id}</span>
-                    <span className={`text-[11px] ${isSel?(up?'text-emerald-200':'text-rose-200'):(up?'text-emerald-400':'text-rose-400')}`}>${s.price.toFixed(2)}</span>
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Selected Stock Banner */}
-            <div className="flex flex-wrap items-center justify-between gap-4">
-              <div>
-                <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{background:`${STOCK_COLORS[sel.id]}20`,border:`1px solid ${STOCK_COLORS[sel.id]}40`}}>
-                    <i className={`fa-solid ${STOCK_ICONS[sel.id]||'fa-chart-simple'} text-lg`} style={{color:STOCK_COLORS[sel.id]}}></i>
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h2 className="text-2xl font-black font-mono text-white tracking-tight">{sel.id}</h2>
-                      <span className="text-sm text-slate-400 font-medium">{sel.name}</span>
-                    </div>
-                    <span className="text-[10px] bg-slate-800/80 text-cyan-400 px-2 py-0.5 rounded-lg border border-slate-700/60 font-mono">{sel.sector}</span>
-                  </div>
-                </div>
-                <div className="flex items-baseline space-x-3 mt-2">
-                  <span className="text-3xl font-black font-mono text-white">
-                    <AnimatedNumber value={sel.price} prefix="$" className="text-white" />
-                  </span>
-                  {(()=>{const chg=sel.price-sel.prevClose;const pct=(chg/sel.prevClose)*100;const up=chg>=0;return(
-                    <span className={`flex items-center font-bold font-mono text-sm ${up?'text-emerald-400 neon-text-green':'text-rose-400 neon-text-rose'}`}>
-                      <i className={`fa-solid ${up?'fa-caret-up':'fa-caret-down'} mr-1`}></i>
-                      {up?'+':''}{chg.toFixed(2)} ({up?'+':''}{pct.toFixed(2)}%)
-                    </span>
-                  )})()}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 font-mono text-xs">
-                {[
-                  {label:'24h High',value:`$${sel.high.toFixed(2)}`,icon:'fa-arrow-up',color:'text-emerald-400'},
-                  {label:'24h Low',value:`$${sel.low.toFixed(2)}`,icon:'fa-arrow-down',color:'text-rose-400'},
-                  {label:'Volume',value:sel.volume.toLocaleString(),icon:'fa-chart-bar',color:'text-cyan-400'},
-                  {label:'Liquidity',value:`${sel.availableShares}`,icon:'fa-droplet',color:sel.availableShares<50?'text-rose-400 animate-pulse':'text-cyan-400'}
-                ].map((m,i)=>(
-                  <div key={i} className="bg-slate-900/60 border border-slate-800/60 rounded-xl p-3 hover:border-slate-700/80 transition-all group">
-                    <div className="flex items-center space-x-1.5 text-slate-500 mb-1">
-                      <i className={`fa-solid ${m.icon} text-[9px] ${m.color} group-hover:scale-110 transition-transform`}></i>
-                      <span className="text-[9px] uppercase tracking-wider font-sans font-semibold">{m.label}</span>
-                    </div>
-                    <span className={`font-bold text-slate-200 ${m.color}`}>{m.value}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Main Grid: Chart | OrderBook | OrderForm */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-            <div className="lg:col-span-7">
-              <ChartPanel stock={sel} windowData={wd} />
-            </div>
-            <div className="lg:col-span-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <OrderBookPanel stock={sel} book={db.orderBook[sel.id]} />
-              <OrderFormPanel stock={sel} user={db.user} onOrder={onOrder} />
-            </div>
-          </div>
-
-          {/* Recent Trades Ticker */}
-          {db.trades.length>0 && (
-            <div className="glass glass-hover rounded-2xl p-4 shadow-xl">
-              <div className="flex items-center space-x-2 mb-3">
-                <i className="fa-solid fa-clock-rotate-left text-cyan-400 text-xs"></i>
-                <h3 className="font-bold text-sm text-white">Recent Trades</h3>
-                <span className="text-[10px] bg-slate-800 text-slate-400 px-2 py-0.5 rounded-full font-mono">{db.trades.length} total</span>
-              </div>
-              <div className="flex space-x-3 overflow-x-auto pb-1">
-                {db.trades.slice(0,8).map((t,i)=>(
-                  <div key={t.id} className="flex-shrink-0 bg-slate-900/60 border border-slate-800/60 rounded-xl px-3 py-2 font-mono text-[11px] hover:border-cyan-800/40 transition-all slide-in-right" style={{animationDelay:`${i*60}ms`}}>
-                    <div className="flex items-center space-x-2">
-                      <span className={`font-bold ${t.type==='BUY'?'text-emerald-400':'text-rose-400'}`}>{t.type}</span>
-                      <span className="text-white font-bold">{t.stockId}</span>
-                    </div>
-                    <div className="text-slate-400 mt-0.5">{t.quantity} @ ${t.price.toFixed(2)}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      );
-    }
-
-    // ═══════════════════════════════════════════════════════════
-    //  CHART PANEL
-    // ═══════════════════════════════════════════════════════════
-    function ChartPanel({ stock, windowData }) {
-      const ref = useRef(null);
-      const chartRef = useRef(null);
-      const [showMA5,setMA5] = useState(true);
-      const [showMA20,setMA20] = useState(true);
-
-      useEffect(()=>{
-        if(!ref.current)return;
-        const ctx=ref.current.getContext('2d');
-        if(chartRef.current)chartRef.current.destroy();
-
-        const labels=windowData.map(p=>p.timestamp);
-        const prices=windowData.map(p=>p.price);
-        const isUp=prices.length>1?prices[prices.length-1]>=prices[0]:true;
-
-        const grad=ctx.createLinearGradient(0,0,0,300);
-        if(isUp){grad.addColorStop(0,'rgba(16,185,129,0.15)');grad.addColorStop(1,'rgba(16,185,129,0)');}
-        else{grad.addColorStop(0,'rgba(244,63,94,0.15)');grad.addColorStop(1,'rgba(244,63,94,0)');}
-
-        const datasets=[{
-          label:`${stock.id}`,data:prices,borderColor:isUp?'#10b981':'#f43f5e',
-          backgroundColor:grad,fill:true,tension:0.4,borderWidth:2.5,pointRadius:0,pointHoverRadius:6,
-          pointHoverBackgroundColor:isUp?'#10b981':'#f43f5e',pointHoverBorderColor:'#fff',pointHoverBorderWidth:2
-        }];
-
-        if(showMA5) datasets.push({
-          label:'MA-5',data:windowData.map(p=>p.ma5),borderColor:'#38bdf8',borderDash:[5,5],
-          fill:false,tension:0.4,borderWidth:1.5,pointRadius:0
-        });
-        if(showMA20) datasets.push({
-          label:'MA-20',data:windowData.map(p=>p.ma20),borderColor:'#a78bfa',borderDash:[8,4],
-          fill:false,tension:0.4,borderWidth:1.5,pointRadius:0
-        });
-
-        chartRef.current=new Chart(ctx,{
-          type:'line',data:{labels,datasets},
-          options:{
-            responsive:true,maintainAspectRatio:false,
-            interaction:{mode:'index',intersect:false},
-            plugins:{
-              legend:{display:false},
-              tooltip:{
-                backgroundColor:'rgba(15,23,42,0.95)',borderColor:'#1e293b',borderWidth:1,
-                titleColor:'#94a3b8',bodyColor:'#f8fafc',
-                titleFont:{family:'JetBrains Mono',size:11},bodyFont:{family:'JetBrains Mono',size:12,weight:'bold'},
-                padding:12,cornerRadius:12,displayColors:true,
-                callbacks:{label:function(ctx){return`  ${ctx.dataset.label}: $${ctx.parsed.y.toFixed(2)}`}}
-              }
-            },
-            scales:{
-              x:{grid:{color:'rgba(30,41,59,0.3)',drawBorder:false},ticks:{color:'#475569',font:{family:'JetBrains Mono',size:9},maxRotation:0,maxTicksLimit:8}},
-              y:{grid:{color:'rgba(30,41,59,0.3)',drawBorder:false},ticks:{color:'#475569',font:{family:'JetBrains Mono',size:10},callback:v=>`$${v.toFixed(0)}`},position:'right'}
-            }
-          }
-        });
-        return()=>{if(chartRef.current)chartRef.current.destroy()};
-      },[stock,windowData,showMA5,showMA20]);
-
-      return(
-        <div className="glass glass-hover rounded-2xl p-5 shadow-xl flex flex-col h-full">
-          <div className="flex flex-wrap items-center justify-between gap-3 mb-3 pb-3 border-b border-slate-800/60">
-            <div className="flex items-center space-x-2">
-              <div className="w-7 h-7 rounded-lg bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center">
-                <i className="fa-solid fa-chart-line text-cyan-400 text-xs"></i>
-              </div>
-              <h3 className="font-bold text-white text-sm tracking-tight">Price Chart</h3>
-              <div className="live-dot"></div>
-            </div>
-            <div className="flex items-center space-x-2 text-[11px] font-mono">
-              <span className="text-slate-500 text-[10px] font-sans">PostgreSQL Window:</span>
-              <button onClick={()=>setMA5(!showMA5)} className={`px-2 py-0.5 rounded-lg border transition-all ${showMA5?'bg-cyan-950/60 text-cyan-300 border-cyan-700/50 font-bold':'bg-slate-900/50 border-slate-800 text-slate-500'}`}>
-                <span className="inline-block w-2 h-0.5 bg-cyan-400 mr-1 rounded" style={{borderBottom:'2px dashed #38bdf8'}}></span>MA-5
-              </button>
-              <button onClick={()=>setMA20(!showMA20)} className={`px-2 py-0.5 rounded-lg border transition-all ${showMA20?'bg-purple-950/60 text-purple-300 border-purple-700/50 font-bold':'bg-slate-900/50 border-slate-800 text-slate-500'}`}>
-                <span className="inline-block w-2 h-0.5 bg-purple-400 mr-1 rounded"></span>MA-20
-              </button>
-            </div>
-          </div>
-          <div className="flex-1 min-h-[300px] relative"><canvas ref={ref}></canvas></div>
-          <div className="mt-2 pt-2 border-t border-slate-800/40 flex justify-between items-center text-[10px] font-mono text-slate-500">
-            <span>AVG(price) OVER (PARTITION BY stock_id ORDER BY timestamp)</span>
-            <span className="text-emerald-400 flex items-center"><div className="live-dot mr-1"></div> Live Feed</span>
-          </div>
-        </div>
-      );
-    }
-
-    // ═══════════════════════════════════════════════════════════
-    //  ORDER BOOK
-    // ═══════════════════════════════════════════════════════════
-    function OrderBookPanel({ stock, book }) {
-      const { bids=[], asks=[] } = book||{};
-      const maxAsk = asks.reduce((m,a)=>Math.max(m,a.quantity),1);
-      const maxBid = bids.reduce((m,b)=>Math.max(m,b.quantity),1);
-      const spread = Math.abs((asks[0]?.price||stock.price)-(bids[0]?.price||stock.price));
-
-      return(
-        <div className="glass glass-hover rounded-2xl p-4 shadow-xl font-mono text-xs flex flex-col h-full">
-          <div className="flex items-center justify-between mb-3 pb-2 border-b border-slate-800/60">
-            <div className="flex items-center space-x-2">
-              <div className="w-6 h-6 rounded-lg bg-slate-800/80 flex items-center justify-center">
-                <i className="fa-solid fa-bars-staggered text-cyan-400 text-[10px]"></i>
-              </div>
-              <h3 className="font-bold text-slate-200 text-sm font-sans">Depth</h3>
-            </div>
-            <div className="live-dot"></div>
-          </div>
-
-          <div className="text-[9px] text-slate-500 uppercase flex justify-between mb-1 px-1 tracking-wider">
-            <span>Price ($)</span><span>Size</span>
-          </div>
-
-          {/* Asks */}
-          <div className="space-y-0.5 mb-1">
-            {asks.slice(0,5).reverse().map((a,i)=>(
-              <div key={i} className="order-row flex justify-between py-1 px-1.5 rounded-lg relative overflow-hidden">
-                <div className="depth-bar-ask absolute inset-0 rounded-lg" style={{width:`${Math.min(100,(a.quantity/maxAsk)*100)}%`,right:0,left:'auto'}}></div>
-                <span className="text-rose-400 font-bold relative z-10">{a.price.toFixed(2)}</span>
-                <span className="text-slate-400 relative z-10">{a.quantity}</span>
-              </div>
-            ))}
-          </div>
-
-          {/* Spread */}
-          <div className="bg-slate-900/80 border border-slate-800/60 rounded-xl py-2 px-3 my-2 text-center shimmer-bg">
-            <div className="text-white font-black text-base">
-              <AnimatedNumber value={stock.price} prefix="$" className="text-white" />
-            </div>
-            <div className="text-[10px] text-slate-500 mt-0.5">Spread: <span className="text-cyan-400 font-bold">${spread.toFixed(2)}</span></div>
-          </div>
-
-          {/* Bids */}
-          <div className="space-y-0.5 mt-1">
-            {bids.slice(0,5).map((b,i)=>(
-              <div key={i} className="order-row flex justify-between py-1 px-1.5 rounded-lg relative overflow-hidden">
-                <div className="depth-bar-bid absolute inset-0 rounded-lg" style={{width:`${Math.min(100,(b.quantity/maxBid)*100)}%`,right:0,left:'auto'}}></div>
-                <span className="text-emerald-400 font-bold relative z-10">{b.price.toFixed(2)}</span>
-                <span className="text-slate-400 relative z-10">{b.quantity}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      );
-    }
-
-    // ═══════════════════════════════════════════════════════════
-    //  ORDER FORM
-    // ═══════════════════════════════════════════════════════════
-    function OrderFormPanel({ stock, user, onOrder }) {
-      const [side,setSide]=useState('BUY');
-      const [qty,setQty]=useState(5);
-      const [orderType,setOrderType]=useState('MARKET');
-      const [limitPrice,setLimitPrice]=useState(stock.price);
-
-      const activePrice=orderType==='MARKET'?stock.price:limitPrice;
-      const total=qty*activePrice;
-      const held=user.portfolio[stock.id]?.shares||0;
-      const canAfford=side==='BUY'?user.cashBalance>=total:held>=qty;
-
-      const handleMax=(pct)=>{
-        if(side==='BUY'){setQty(Math.max(1,Math.floor((user.cashBalance*pct)/activePrice)))}
-        else{setQty(Math.max(1,Math.floor(held*pct)))}
-      };
-
-      const submit=(e)=>{
-        e.preventDefault();
-        if(qty<=0)return;
-        onOrder({stockId:stock.id,type:side,orderType,price:activePrice,quantity:parseInt(qty)});
-      };
-
-      return(
-        <div className="glass glass-hover rounded-2xl p-4 shadow-xl flex flex-col justify-between h-full">
+        <form onSubmit={submit} className="space-y-3 text-sm">
           <div>
-            {/* BUY / SELL tabs */}
-            <div className="grid grid-cols-2 gap-1.5 mb-3 bg-slate-900/50 p-1 rounded-xl border border-slate-800/60">
-              <button onClick={()=>setSide('BUY')}
-                className={`py-2 rounded-lg font-black text-xs uppercase tracking-wider transition-all flex items-center justify-center space-x-1.5 ${
-                  side==='BUY'?'bg-gradient-to-r from-emerald-600 to-emerald-500 text-white shadow-lg shadow-emerald-500/30 btn-glow-green':'text-slate-500 hover:text-slate-300'
-                }`}>
-                <i className="fa-solid fa-arrow-trend-up text-[10px]"></i><span>Buy</span>
-              </button>
-              <button onClick={()=>setSide('SELL')}
-                className={`py-2 rounded-lg font-black text-xs uppercase tracking-wider transition-all flex items-center justify-center space-x-1.5 ${
-                  side==='SELL'?'bg-gradient-to-r from-rose-600 to-rose-500 text-white shadow-lg shadow-rose-500/30 btn-glow-red':'text-slate-500 hover:text-slate-300'
-                }`}>
-                <i className="fa-solid fa-arrow-trend-down text-[10px]"></i><span>Sell</span>
-              </button>
-            </div>
-
-            {/* Order Type */}
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Type</span>
-              <div className="flex bg-slate-900/50 rounded-lg p-0.5 border border-slate-800/60">
-                {['MARKET','LIMIT'].map(t=>(
-                  <button key={t} onClick={()=>setOrderType(t)}
-                    className={`px-2.5 py-1 rounded-md text-[11px] font-mono font-bold transition-all ${orderType===t?'bg-cyan-500/15 text-cyan-300 border border-cyan-500/30':'text-slate-500'}`}>
-                    {t}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <form onSubmit={submit} className="space-y-3 text-xs font-mono">
-              {orderType==='LIMIT'&&(
-                <div>
-                  <label className="block text-[10px] text-slate-500 mb-1 font-sans uppercase tracking-wider">Limit Price ($)</label>
-                  <input type="number" step="0.01" value={limitPrice} onChange={e=>setLimitPrice(parseFloat(e.target.value)||0)}
-                    className="w-full bg-slate-900/60 border border-slate-700/60 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/20 transition-all" />
-                </div>
-              )}
-
-              <div>
-                <div className="flex justify-between mb-1">
-                  <label className="text-[10px] text-slate-500 font-sans uppercase tracking-wider">Shares</label>
-                  <span className="text-[10px] text-slate-500 font-mono">{side==='BUY'?`Avail: ${stock.availableShares}`:`Held: ${held}`}</span>
-                </div>
-                <input type="number" min="1" value={qty} onChange={e=>setQty(parseInt(e.target.value)||0)}
-                  className="w-full bg-slate-900/60 border border-slate-700/60 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/20 transition-all" />
-              </div>
-
-              <div className="grid grid-cols-4 gap-1">
-                {[0.25,0.50,0.75,1.0].map(p=>(
-                  <button key={p} type="button" onClick={()=>handleMax(p)}
-                    className="bg-slate-900/60 hover:bg-slate-800 text-slate-400 hover:text-white py-1 rounded-lg border border-slate-800/60 transition-all active:scale-95 text-[10px] font-bold">
-                    {p*100}%
-                  </button>
-                ))}
-              </div>
-
-              <div className="bg-slate-900/40 border border-slate-800/40 rounded-xl p-2.5 space-y-1 text-[11px]">
-                <div className="flex justify-between text-slate-500"><span>Price:</span><span className="text-slate-300">${activePrice.toFixed(2)}</span></div>
-                <div className="flex justify-between text-slate-500"><span>Total:</span><span className="text-cyan-300 font-bold">${total.toFixed(2)}</span></div>
-              </div>
-
-              <button type="submit" disabled={!canAfford||qty<=0}
-                className={`w-full py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition-all active:scale-[0.97] ${
-                  !canAfford||qty<=0?'bg-slate-800/60 text-slate-600 cursor-not-allowed':
-                  side==='BUY'?'bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white btn-glow-green':
-                  'bg-gradient-to-r from-rose-600 to-red-500 hover:from-rose-500 hover:to-red-400 text-white btn-glow-red'
-                }`}>
-                <i className={`fa-solid ${side==='BUY'?'fa-shield-halved':'fa-arrow-right-from-bracket'} mr-1.5`}></i>
-                {side} {stock.id}
-              </button>
-            </form>
+            <label className="block text-xs text-slate-500 mb-1">Username</label>
+            <input value={username} onChange={e => setU(e.target.value)} required
+              autoComplete="username"
+              className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-white focus:outline-none focus:border-cyan-500" />
           </div>
+          {mode === 'register' && (
+            <div>
+              <label className="block text-xs text-slate-500 mb-1">Email</label>
+              <input type="email" value={email} onChange={e => setE(e.target.value)} required
+                className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-white focus:outline-none focus:border-cyan-500" />
+            </div>
+          )}
+          {mode === 'register' && (
+            <div>
+              <div className="flex justify-between items-center mb-1">
+                <label className="text-xs text-slate-500">Starting Cash Balance ($)</label>
+                <span className="text-[10px] text-cyan-400 font-mono">Default: $50,000</span>
+              </div>
+              <input type="number" min="0" step="500" value={customCash} onChange={e => setCustomCash(e.target.value)} required
+                className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-white font-mono focus:outline-none focus:border-cyan-500" />
+            </div>
+          )}
+          <div>
+            <label className="block text-xs text-slate-500 mb-1">Password</label>
+            <input type="password" value={password} onChange={e => setP(e.target.value)} required
+              autoComplete="current-password"
+              className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-white focus:outline-none focus:border-cyan-500" />
+          </div>
+          {err && <p className="text-rose-400 text-xs">{err}</p>}
+          <button disabled={busy} type="submit"
+            className="btn w-full py-2.5 bg-cyan-600 hover:bg-cyan-700 text-white">
+            {busy ? 'Please wait...' : (mode === 'login' ? 'Sign In' : 'Create Account')}
+          </button>
+        </form>
 
-          <div className="mt-3 pt-2 border-t border-slate-800/40 text-[10px] text-cyan-500/60 font-mono flex items-center space-x-1">
-            <i className="fa-solid fa-lock text-[8px]"></i>
-            <span>Protected by SELECT ... FOR UPDATE</span>
+        <div className="mt-6 pt-4 border-t border-slate-800 text-[11px]">
+          <p className="text-slate-500 mb-2">Quick login:</p>
+          <div className="grid grid-cols-2 gap-2">
+            <button type="button" onClick={() => fill('pranav_trader', 'password123')}
+              className="btn py-2 bg-slate-800 hover:bg-slate-700 text-slate-200">Trader: pranav</button>
+            <button type="button" onClick={() => fill('bhanu_trader', 'password123')}
+              className="btn py-2 bg-slate-800 hover:bg-slate-700 text-slate-200">Trader: bhanu</button>
+            <button type="button" onClick={() => fill('navdeep_trader', 'password123')}
+              className="btn py-2 bg-slate-800 hover:bg-slate-700 text-slate-200">Trader: navdeep</button>
+            <button type="button" onClick={() => fill('admin_exchange', 'admin123')}
+              className="btn py-2 bg-slate-800 hover:bg-slate-700 text-amber-300">Admin: admin_exchange</button>
           </div>
         </div>
-      );
-    }
+      </div>
+    </div>
+  );
+}
 
-    // ═══════════════════════════════════════════════════════════
-    //  PORTFOLIO VIEW
-    // ═══════════════════════════════════════════════════════════
-    function PortfolioView({ user, stocks, onOrder, setSelId, setTab }) {
-      let totalValue=0, totalCost=0;
-      const holdings=Object.entries(user.portfolio).map(([sym,d])=>{
-        const st=stocks.find(s=>s.id===sym)||{price:d.avgBuyPrice,name:sym};
-        const cv=d.shares*st.price; const cb=d.shares*d.avgBuyPrice;
-        const pnl=cv-cb; const pnlPct=cb>0?(pnl/cb)*100:0;
-        totalValue+=cv; totalCost+=cb;
-        return{sym,name:st.name,shares:d.shares,avg:d.avgBuyPrice,curr:st.price,value:cv,pnl,pnlPct};
-      });
-      const totalPnl=totalValue-totalCost;
-      const netWorth=user.cashBalance+totalValue;
+// ─── HEADER ─────────────────────────────────────────────────
+function Header({ user, tab, setTab, dbOnline, onRace, onLogout, cash, netWorth }) {
+  const tabs = [
+    { id:'terminal',  icon:'fa-chart-line', label:'Terminal' },
+    { id:'portfolio', icon:'fa-wallet',     label:'Portfolio' },
+    { id:'analytics', icon:'fa-code',       label:'SQL' },
+  ];
+  if (user.role === 'admin') tabs.push({ id:'admin', icon:'fa-user-shield', label:'Admin' });
 
-      return(
-        <div className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+  return (
+    <header className="border-b border-slate-800 bg-[#0d121c] sticky top-0 z-30">
+      <div className="max-w-[1300px] mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <i className="fa-solid fa-database text-cyan-400"></i>
+          <div>
+            <h1 className="font-bold text-white text-base">StockSim</h1>
+            <p className="text-[11px] text-slate-500">
+              {user.username} · {user.role} ·
+              {dbOnline ? <span className="text-emerald-400 ml-1">connected</span>
+                        : <span className="text-amber-400 ml-1">offline</span>}
+            </p>
+          </div>
+        </div>
+
+        <nav className="flex gap-1 bg-slate-900 rounded-lg p-1">
+          {tabs.map(t => (
+            <button key={t.id} onClick={() => setTab(t.id)}
+              className={`px-3 py-1.5 rounded-md text-xs font-medium ${tab === t.id ? 'bg-cyan-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}>
+              <i className={`fa-solid ${t.icon} mr-1.5`}></i>{t.label}
+            </button>
+          ))}
+        </nav>
+
+        <div className="flex items-center gap-2 text-xs">
+          <button onClick={onRace}
+            className="btn px-3 py-1.5 bg-amber-600/20 border border-amber-700 text-amber-300 hover:bg-amber-600/30">
+            <i className="fa-solid fa-bolt mr-1"></i>Race Test
+          </button>
+          <div className="card px-3 py-1.5 flex gap-3">
+            <div>
+              <div className="text-[10px] text-slate-500 uppercase">Cash</div>
+              <div className="font-mono text-emerald-400 font-semibold">${fmt(cash)}</div>
+            </div>
+            <div className="border-l border-slate-800 pl-3">
+              <div className="text-[10px] text-slate-500 uppercase">Net Worth</div>
+              <div className="font-mono text-cyan-300 font-semibold">${fmt(netWorth)}</div>
+            </div>
+          </div>
+          <button onClick={onLogout}
+            className="btn px-3 py-1.5 bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700">
+            <i className="fa-solid fa-right-from-bracket"></i>
+          </button>
+        </div>
+      </div>
+    </header>
+  );
+}
+
+// ─── TERMINAL ───────────────────────────────────────────────
+function Terminal({ stocks, sel, setSelId, portfolio, onOrder, orders, onCancel, trades }) {
+  return (
+    <div className="space-y-4">
+      <div className="card p-4">
+        <div className="flex gap-2 overflow-x-auto pb-3 mb-3 border-b border-slate-800">
+          <span className="text-[11px] uppercase text-slate-500 font-semibold self-center">Markets</span>
+          {stocks.map(s => {
+            const isSel = s.stock_id === sel.stock_id;
+            const up = s.pct_change >= 0;
+            return (
+              <button key={s.stock_id} onClick={() => setSelId(s.stock_id)}
+                className={`px-3 py-1.5 rounded-md text-xs whitespace-nowrap ${isSel ? 'bg-cyan-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}>
+                <i className={`fa-solid ${ICONS[s.stock_id] || 'fa-chart-simple'} mr-1.5`}
+                   style={{ color: isSel ? '#fff' : COLORS[s.stock_id] }}></i>
+                {s.stock_id}
+                <span className={`ml-2 font-mono ${isSel ? 'text-white' : (up ? 'text-emerald-400' : 'text-rose-400')}`}>
+                  ${fmt(s.current_price)}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-3">
+              <i className={`fa-solid ${ICONS[sel.stock_id] || 'fa-chart-simple'} text-2xl`}
+                 style={{ color: COLORS[sel.stock_id] }}></i>
+              <div>
+                <div className="flex items-baseline gap-2">
+                  <h2 className="text-xl font-bold font-mono text-white">{sel.stock_id}</h2>
+                  <span className="text-sm text-slate-400">{sel.company_name}</span>
+                </div>
+                <span className="text-[11px] text-slate-500">{sel.sector}</span>
+              </div>
+            </div>
+            <div className="flex items-baseline gap-3 mt-3">
+              <span className="text-2xl font-bold font-mono text-white">${fmt(sel.current_price)}</span>
+              <span className={`font-mono text-sm font-semibold ${sel.pct_change >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                {sel.pct_change >= 0 ? '+' : ''}{fmt(sel.pct_change)}%
+              </span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
             {[
-              {label:'Net Worth',value:netWorth,icon:'fa-gem',gradient:'from-cyan-500/15 to-blue-500/15',border:'border-cyan-800/30',color:'text-white'},
-              {label:'Cash Balance',value:user.cashBalance,icon:'fa-vault',gradient:'from-emerald-500/15 to-green-500/15',border:'border-emerald-800/30',color:'text-emerald-400'},
-              {label:'Portfolio Equity',value:totalValue,icon:'fa-chart-pie',gradient:'from-blue-500/15 to-violet-500/15',border:'border-blue-800/30',color:'text-blue-400'},
-              {label:'Unrealized P&L',value:totalPnl,icon:totalPnl>=0?'fa-arrow-trend-up':'fa-arrow-trend-down',gradient:totalPnl>=0?'from-emerald-500/15 to-teal-500/15':'from-rose-500/15 to-red-500/15',border:totalPnl>=0?'border-emerald-800/30':'border-rose-800/30',color:totalPnl>=0?'text-emerald-400':'text-rose-400'}
-            ].map((c,i)=>(
-              <div key={i} className={`glass glass-hover rounded-2xl p-5 shadow-xl bg-gradient-to-br ${c.gradient} border ${c.border}`} style={{animationDelay:`${i*80}ms`}}>
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-[10px] text-slate-400 uppercase tracking-widest font-bold">{c.label}</span>
-                  <i className={`fa-solid ${c.icon} ${c.color} text-sm`}></i>
-                </div>
-                <div className={`text-2xl font-black font-mono ${c.color}`}>
-                  <AnimatedNumber value={c.value} prefix={c.label==='Unrealized P&L'?(c.value>=0?'+$':'$'):'$'} className={c.color} />
-                </div>
+              { l:'24h High', v:'$' + fmt(sel.day_high) },
+              { l:'24h Low',  v:'$' + fmt(sel.day_low) },
+              { l:'Volume',   v:Number(sel.volume).toLocaleString() },
+              { l:'Liquidity', v:sel.available_shares + ' sh', warn: sel.available_shares < 50 }
+            ].map((m, i) => (
+              <div key={i} className="bg-slate-900 rounded-md p-2.5 border border-slate-800 min-w-[90px]">
+                <div className="text-[10px] uppercase text-slate-500 mb-1">{m.l}</div>
+                <div className={`font-mono font-semibold ${m.warn ? 'text-rose-400' : 'text-slate-200'}`}>{m.v}</div>
               </div>
             ))}
           </div>
+        </div>
+      </div>
 
-          <div className="glass glass-hover rounded-2xl p-6 shadow-xl">
-            <h3 className="text-lg font-bold text-white mb-4 flex items-center space-x-2">
-              <i className="fa-solid fa-briefcase text-cyan-400"></i>
-              <span>Active Positions</span>
-            </h3>
-            {holdings.length===0?(
-              <div className="text-center py-16 text-slate-600"><i className="fa-solid fa-inbox text-4xl mb-3 block"></i><p className="font-mono">No positions. Start trading!</p></div>
-            ):(
-              <div className="overflow-x-auto">
-                <table className="w-full text-left font-mono text-xs">
-                  <thead><tr className="border-b border-slate-800/60 text-slate-500 uppercase text-[10px] tracking-wider">
-                    <th className="py-3 px-3 font-sans font-bold">Asset</th><th className="py-3 px-3 text-right font-sans font-bold">Shares</th>
-                    <th className="py-3 px-3 text-right font-sans font-bold">Avg Price</th><th className="py-3 px-3 text-right font-sans font-bold">Current</th>
-                    <th className="py-3 px-3 text-right font-sans font-bold">Value</th><th className="py-3 px-3 text-right font-sans font-bold">P&L</th>
-                    <th className="py-3 px-3 text-center font-sans font-bold">Action</th>
-                  </tr></thead>
-                  <tbody className="divide-y divide-slate-800/40">
-                    {holdings.map(h=>{
-                      const up=h.pnl>=0;
-                      return(
-                        <tr key={h.sym} className="hover:bg-slate-800/20 transition-all group">
-                          <td className="py-3.5 px-3">
-                            <button onClick={()=>{setSelId(h.sym);setTab('terminal')}} className="flex items-center space-x-2 group-hover:text-cyan-300 transition-colors">
-                              <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{background:`${STOCK_COLORS[h.sym]||'#38bdf8'}15`,border:`1px solid ${STOCK_COLORS[h.sym]||'#38bdf8'}30`}}>
-                                <i className={`fa-solid ${STOCK_ICONS[h.sym]||'fa-chart-simple'} text-[10px]`} style={{color:STOCK_COLORS[h.sym]}}></i>
-                              </div>
-                              <div><span className="font-bold text-cyan-400 text-sm">{h.sym}</span><br/><span className="text-[10px] text-slate-500 font-sans">{h.name}</span></div>
-                            </button>
-                          </td>
-                          <td className="py-3.5 px-3 text-right font-bold text-white">{h.shares}</td>
-                          <td className="py-3.5 px-3 text-right text-slate-400">${h.avg.toFixed(2)}</td>
-                          <td className="py-3.5 px-3 text-right text-white font-bold">${h.curr.toFixed(2)}</td>
-                          <td className="py-3.5 px-3 text-right text-white font-bold">${h.value.toFixed(2)}</td>
-                          <td className={`py-3.5 px-3 text-right font-bold ${up?'text-emerald-400':'text-rose-400'}`}>
-                            {up?'+':''}${h.pnl.toFixed(2)}<br/><span className="text-[10px]">({up?'+':''}{h.pnlPct.toFixed(1)}%)</span>
-                          </td>
-                          <td className="py-3.5 px-3 text-center">
-                            <button onClick={()=>onOrder({stockId:h.sym,type:'SELL',orderType:'MARKET',price:h.curr,quantity:h.shares})}
-                              className="bg-rose-950/60 hover:bg-rose-900/80 border border-rose-800/60 text-rose-300 px-3 py-1.5 rounded-xl font-sans font-bold text-[10px] transition-all active:scale-95 shadow hover:shadow-rose-500/10">
-                              <i className="fa-solid fa-arrow-right-from-bracket mr-1 text-[9px]"></i>Sell All
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+        <div className="lg:col-span-7"><StockChart stock={sel} /></div>
+        <div className="lg:col-span-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <OrderBook stock={sel} />
+          <OrderForm stock={sel} portfolio={portfolio} onOrder={onOrder} />
+        </div>
+      </div>
+
+      {orders.length > 0 && (
+        <div className="card p-4">
+          <h3 className="font-semibold text-sm text-white mb-3">
+            <i className="fa-solid fa-hourglass-half text-amber-400 mr-1.5"></i>
+            Open Orders <span className="text-slate-500 text-[11px] font-normal ml-2">{orders.length}</span>
+          </h3>
+          <table className="w-full text-xs font-mono">
+            <thead>
+              <tr className="text-slate-500 uppercase text-[10px] border-b border-slate-800">
+                <th className="text-left py-2 px-2">ID</th>
+                <th className="text-left py-2 px-2">Stock</th>
+                <th className="text-left py-2 px-2">Side</th>
+                <th className="text-right py-2 px-2">Price</th>
+                <th className="text-right py-2 px-2">Qty</th>
+                <th className="text-right py-2 px-2">Filled</th>
+                <th className="text-center py-2 px-2">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {orders.map(o => (
+                <tr key={o.order_id} className="border-b border-slate-800/50">
+                  <td className="py-2 px-2 text-slate-500">#{o.order_id}</td>
+                  <td className="py-2 px-2 text-white font-semibold">{o.stock_id}</td>
+                  <td className={`py-2 px-2 font-semibold ${o.order_type === 'BUY' ? 'text-emerald-400' : 'text-rose-400'}`}>{o.order_type}</td>
+                  <td className="py-2 px-2 text-right text-slate-300">${fmt(o.price)}</td>
+                  <td className="py-2 px-2 text-right text-slate-300">{o.quantity}</td>
+                  <td className="py-2 px-2 text-right text-slate-500">{o.filled_qty}/{o.quantity}</td>
+                  <td className="py-2 px-2 text-center">
+                    <button onClick={() => onCancel(o.order_id)} className="text-rose-400 hover:text-rose-300 text-[11px]">Cancel</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {trades.length > 0 && (
+        <div className="card p-4">
+          <h3 className="font-semibold text-sm text-white mb-3">
+            <i className="fa-solid fa-clock-rotate-left text-cyan-400 mr-1.5"></i>
+            Recent Trades
+          </h3>
+          <div className="flex gap-3 overflow-x-auto">
+            {trades.slice(0, 8).map(t => (
+              <div key={t.trade_id} className="flex-shrink-0 bg-slate-900 border border-slate-800 rounded-md px-3 py-2 font-mono text-xs">
+                <div className="flex gap-2">
+                  <span className={t.trade_type === 'BUY' ? 'text-emerald-400' : 'text-rose-400'}>{t.trade_type}</span>
+                  <span className="text-white font-semibold">{t.stock_id}</span>
+                </div>
+                <div className="text-slate-400 text-[11px] mt-0.5">{t.quantity} @ ${fmt(t.executed_price)}</div>
               </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── STOCK CHART ────────────────────────────────────────────
+function StockChart({ stock }) {
+  const ref = useRef(null), chartRef = useRef(null);
+  const [data, setData] = useState([]);
+
+  useEffect(() => {
+    let cancel = false;
+    async function load() {
+      try {
+        const rows = await api(`/analytics/rolling/${stock.stock_id}?limit=40`);
+        if (!cancel) setData(rows);
+      } catch {}
+    }
+    load();
+    const iv = setInterval(load, 5000);
+    return () => { cancel = true; clearInterval(iv); };
+  }, [stock.stock_id]);
+
+  useEffect(() => {
+    if (!ref.current || data.length === 0 || !window.Chart) return;
+    const ctx = ref.current.getContext('2d');
+    if (chartRef.current) chartRef.current.destroy();
+
+    chartRef.current = new window.Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: data.map(p => new Date(p.recorded_at).toLocaleTimeString('en-GB', { hour12:false })),
+        datasets: [
+          { label: stock.stock_id, data: data.map(p => parseFloat(p.price)),
+            borderColor:'#38bdf8', backgroundColor:'rgba(56,189,248,0.08)',
+            fill:true, tension:0.3, borderWidth:2, pointRadius:0 },
+          { label:'MA-5', data: data.map(p => parseFloat(p.ma_5 || p.price)),
+            borderColor:'#f59e0b', borderDash:[4,4], fill:false, tension:0.3, borderWidth:1.2, pointRadius:0 },
+          { label:'MA-20', data: data.map(p => parseFloat(p.ma_20 || p.price)),
+            borderColor:'#a78bfa', borderDash:[8,4], fill:false, tension:0.3, borderWidth:1.2, pointRadius:0 },
+        ]
+      },
+      options: {
+        responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{display:false} },
+        scales:{
+          x:{ grid:{color:'rgba(51,65,85,0.3)'}, ticks:{color:'#64748b',font:{size:9},maxTicksLimit:6} },
+          y:{ grid:{color:'rgba(51,65,85,0.3)'}, ticks:{color:'#64748b',font:{size:10},callback:v=>'$'+v} }
+        }
+      }
+    });
+    return () => { if (chartRef.current) chartRef.current.destroy(); };
+  }, [data, stock.stock_id]);
+
+  return (
+    <div className="card p-4 h-full flex flex-col">
+      <div className="flex items-center justify-between mb-3 pb-3 border-b border-slate-800">
+        <h3 className="font-semibold text-sm text-white">
+          <i className="fa-solid fa-chart-line text-cyan-400 mr-1.5"></i>Price Chart
+        </h3>
+        <span className="text-[10px] font-mono text-slate-500">AVG() OVER · LAG() OVER</span>
+      </div>
+      <div className="flex-1 min-h-[300px] relative"><canvas ref={ref}></canvas></div>
+    </div>
+  );
+}
+
+// ─── ORDER BOOK ─────────────────────────────────────────────
+function OrderBook({ stock }) {
+  const [book, setBook] = useState({ bids:[], asks:[] });
+
+  useEffect(() => {
+    let cancel = false;
+    async function load() {
+      try {
+        const b = await api('/analytics/orderbook/' + stock.stock_id);
+        if (!cancel) setBook(b);
+      } catch {}
+    }
+    load();
+    const iv = setInterval(load, 3000);
+    return () => { cancel = true; clearInterval(iv); };
+  }, [stock.stock_id]);
+
+  const { bids = [], asks = [] } = book;
+
+  return (
+    <div className="card p-4 font-mono text-xs">
+      <h3 className="font-semibold text-sm text-slate-200 font-sans mb-3 pb-2 border-b border-slate-800">
+        <i className="fa-solid fa-bars-staggered text-cyan-400 mr-1.5"></i>Order Book
+      </h3>
+
+      <div className="text-[9px] text-slate-500 uppercase flex justify-between mb-1 px-1">
+        <span>Price</span><span>Size</span>
+      </div>
+
+      <div className="space-y-0.5 mb-2">
+        {asks.length === 0 && <div className="text-slate-600 text-[10px] py-1">No asks</div>}
+        {asks.slice(0, 5).reverse().map((a, i) => (
+          <div key={i} className="flex justify-between py-1 px-1.5">
+            <span className="text-rose-400 font-semibold">{fmt(a.price)}</span>
+            <span className="text-slate-400">{a.open_qty}</span>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-slate-900 border border-slate-800 rounded-md py-2 px-3 my-2 text-center">
+        <div className="text-white font-bold">${fmt(stock.current_price)}</div>
+      </div>
+
+      <div className="space-y-0.5">
+        {bids.length === 0 && <div className="text-slate-600 text-[10px] py-1">No bids</div>}
+        {bids.slice(0, 5).map((b, i) => (
+          <div key={i} className="flex justify-between py-1 px-1.5">
+            <span className="text-emerald-400 font-semibold">{fmt(b.price)}</span>
+            <span className="text-slate-400">{b.open_qty}</span>
+          </div>
+        ))}
+      </div>
+
+      <p className="text-[10px] text-slate-500 mt-3 pt-2 border-t border-slate-800">From PENDING orders</p>
+    </div>
+  );
+}
+
+// ─── ORDER FORM ─────────────────────────────────────────────
+function OrderForm({ stock, portfolio, onOrder }) {
+  const [side, setSide] = useState('BUY');
+  const [qty, setQty] = useState(5);
+  const [orderType, setOrderType] = useState('MARKET');
+  const [limitPrice, setLimit] = useState(stock.current_price);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => { setLimit(stock.current_price); }, [stock.stock_id, stock.current_price]);
+
+  const holding = portfolio.find(p => p.stock_id === stock.stock_id);
+  const held = holding ? holding.shares_held : 0;
+  const price = orderType === 'MARKET' ? stock.current_price : limitPrice;
+  const total = qty * price;
+
+  const submit = async (e) => {
+    e.preventDefault();
+    if (qty <= 0) return;
+    setBusy(true);
+    await onOrder({
+      stock_id: stock.stock_id,
+      order_type: side,
+      price_type: orderType,
+      price: orderType === 'LIMIT' ? limitPrice : 0,
+      quantity: parseInt(qty),
+    });
+    setBusy(false);
+  };
+
+  return (
+    <div className="card p-4 flex flex-col justify-between">
+      <div>
+        <div className="grid grid-cols-2 gap-1.5 mb-3 bg-slate-900 p-1 rounded-lg">
+          <button onClick={() => setSide('BUY')}
+            className={`py-2 rounded-md text-xs font-bold uppercase ${side === 'BUY' ? 'bg-emerald-600 text-white' : 'text-slate-500'}`}>Buy</button>
+          <button onClick={() => setSide('SELL')}
+            className={`py-2 rounded-md text-xs font-bold uppercase ${side === 'SELL' ? 'bg-rose-600 text-white' : 'text-slate-500'}`}>Sell</button>
+        </div>
+
+        <div className="flex items-center justify-between mb-3">
+          <span className="text-[10px] text-slate-500 uppercase font-semibold">Type</span>
+          <div className="flex bg-slate-900 rounded-md p-0.5">
+            {['MARKET','LIMIT'].map(t => (
+              <button key={t} onClick={() => setOrderType(t)}
+                className={`px-2.5 py-1 rounded text-[11px] font-mono font-bold ${orderType === t ? 'bg-cyan-600 text-white' : 'text-slate-500'}`}>{t}</button>
+            ))}
+          </div>
+        </div>
+
+        <form onSubmit={submit} className="space-y-3 text-xs font-mono">
+          {orderType === 'LIMIT' && (
+            <div>
+              <label className="block text-[10px] text-slate-500 mb-1 font-sans uppercase">Limit Price ($)</label>
+              <input type="number" step="0.01" value={limitPrice}
+                onChange={e => setLimit(parseFloat(e.target.value) || 0)}
+                className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-white focus:outline-none focus:border-cyan-500" />
+            </div>
+          )}
+          <div>
+            <div className="flex justify-between mb-1">
+              <label className="text-[10px] text-slate-500 font-sans uppercase">Shares</label>
+              <span className="text-[10px] text-slate-500">
+                {side === 'BUY' ? `Avail: ${stock.available_shares}` : `Held: ${held}`}
+              </span>
+            </div>
+            <input type="number" min="1" value={qty}
+              onChange={e => setQty(parseInt(e.target.value) || 0)}
+              className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-white focus:outline-none focus:border-cyan-500" />
+          </div>
+
+          <div className="bg-slate-900 border border-slate-800 rounded-md p-2.5 space-y-1 text-[11px]">
+            <div className="flex justify-between text-slate-500"><span>Price</span><span className="text-slate-300">${fmt(price)}</span></div>
+            <div className="flex justify-between text-slate-500"><span>Total</span><span className="text-cyan-300 font-bold">${fmt(total)}</span></div>
+          </div>
+
+          <button type="submit" disabled={busy || qty <= 0}
+            className={`btn w-full py-2.5 text-xs font-bold uppercase text-white ${side === 'BUY' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-rose-600 hover:bg-rose-700'}`}>
+            {busy ? 'Placing...' : `${side} ${stock.stock_id}`}
+          </button>
+        </form>
+      </div>
+
+      <p className="text-[10px] text-slate-500 mt-3 pt-2 border-t border-slate-800 font-mono">
+        <i className="fa-solid fa-lock mr-1"></i>SELECT ... FOR UPDATE
+      </p>
+    </div>
+  );
+}
+
+// ─── PORTFOLIO ──────────────────────────────────────────────
+function Portfolio({ portfolio, cash, setSelId, setTab, orders = [], onCancel, onCashChange, toast }) {
+  const [cashAmount, setCashAmount] = useState('');
+  const [cashBusy, setCashBusy] = useState(false);
+
+  const handleCash = async (action) => {
+    const val = parseFloat(cashAmount);
+    if (!val || val <= 0) {
+      if (toast) toast('Invalid Amount', 'Please enter a positive dollar amount', 'ERROR');
+      return;
+    }
+    setCashBusy(true);
+    try {
+      const res = await api('/me/cash', {
+        method: 'POST',
+        body: JSON.stringify({ action, amount: val })
+      });
+      if (onCashChange) onCashChange(res.cash_balance);
+      if (toast) toast(action === 'DEPOSIT' ? 'Cash Deposited' : 'Cash Withdrawn', `${action === 'DEPOSIT' ? 'Added' : 'Withdrew'} $${val.toLocaleString()} successfully`, 'SUCCESS');
+      setCashAmount('');
+    } catch (e) {
+      if (toast) toast('Transaction Failed', e.message, 'ERROR');
+    } finally {
+      setCashBusy(false);
+    }
+  };
+
+  let tv = 0, tc = 0;
+  portfolio.forEach(h => {
+    tv += parseFloat(h.current_value || 0);
+    tc += h.shares_held * parseFloat(h.avg_buy_price || 0);
+  });
+  const pnl = tv - tc;
+  const nw = parseFloat(cash || 0) + tv;
+
+  return (
+    <div className="space-y-5">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        {[
+          { l:'Net Worth',       v:nw,   c:'text-white' },
+          { l:'Cash Balance',    v:cash, c:'text-emerald-400' },
+          { l:'Portfolio Value', v:tv,   c:'text-cyan-300' },
+          { l:'Unrealized P&L',  v:pnl,  c: pnl >= 0 ? 'text-emerald-400' : 'text-rose-400' }
+        ].map((c, i) => (
+          <div key={i} className="card p-5">
+            <div className="text-[10px] text-slate-500 uppercase font-semibold mb-2">{c.l}</div>
+            <div className={`text-2xl font-bold font-mono ${c.c}`}>
+              {c.l === 'Unrealized P&L' && pnl >= 0 ? '+' : ''}${fmt(c.v)}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* ── Cash Deposit & Withdrawal Panel ── */}
+      <div className="card p-5 border border-slate-800 bg-[#0d131f]">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h3 className="font-semibold text-white text-sm flex items-center gap-2">
+              <i className="fa-solid fa-money-bill-transfer text-emerald-400"></i>
+              Account Funds & Liquidity
+            </h3>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Current available cash: <span className="text-emerald-400 font-mono font-semibold">${fmt(cash)}</span>
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative">
+              <span className="absolute left-3 top-2.5 text-slate-500 text-xs">$</span>
+              <input type="number" min="1" step="100" placeholder="Amount"
+                value={cashAmount} onChange={e => setCashAmount(e.target.value)}
+                disabled={cashBusy}
+                className="w-36 pl-6 pr-3 py-2 bg-slate-900 border border-slate-700 rounded-md text-xs font-mono text-white focus:outline-none focus:border-cyan-500" />
+            </div>
+            <button onClick={() => handleCash('DEPOSIT')} disabled={cashBusy || !cashAmount}
+              className="btn px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold flex items-center gap-1.5 disabled:opacity-50">
+              <i className="fa-solid fa-plus"></i> Deposit
+            </button>
+            <button onClick={() => handleCash('WITHDRAW')} disabled={cashBusy || !cashAmount}
+              className="btn px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold flex items-center gap-1.5 disabled:opacity-50">
+              <i className="fa-solid fa-minus"></i> Withdraw
+            </button>
+            <div className="flex gap-1 ml-2">
+              {[1000, 5000, 10000].map(quick => (
+                <button key={quick} type="button" onClick={() => setCashAmount(quick.toString())}
+                  className="px-2 py-1 bg-slate-800/80 hover:bg-slate-700 text-[11px] text-slate-300 rounded font-mono">
+                  +${quick >= 1000 ? quick / 1000 + 'k' : quick}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="card p-5">
+        <h3 className="font-semibold text-white mb-4">
+          <i className="fa-solid fa-briefcase text-cyan-400 mr-1.5"></i>Holdings
+        </h3>
+        {portfolio.length === 0 ? (
+          <div className="text-center py-10 text-slate-500 text-sm">
+            <p>No settled positions yet.</p>
+            {orders.length > 0 && (
+              <p className="text-xs text-amber-400 mt-2">
+                <i className="fa-solid fa-hourglass-half mr-1"></i>
+                You have {orders.length} order(s) resting in the order book below waiting to be filled.
+              </p>
             )}
           </div>
+        ) : (
+          <table className="w-full text-left font-mono text-xs">
+            <thead>
+              <tr className="border-b border-slate-800 text-slate-500 uppercase text-[10px]">
+                <th className="py-3 px-3 font-sans">Asset</th>
+                <th className="py-3 px-3 text-right font-sans">Shares</th>
+                <th className="py-3 px-3 text-right font-sans">Avg Buy</th>
+                <th className="py-3 px-3 text-right font-sans">Current</th>
+                <th className="py-3 px-3 text-right font-sans">Value</th>
+                <th className="py-3 px-3 text-right font-sans">P&L</th>
+              </tr>
+            </thead>
+            <tbody>
+              {portfolio.map(h => {
+                const up = parseFloat(h.unrealized_pnl) >= 0;
+                return (
+                  <tr key={h.stock_id} className="border-b border-slate-800/50 hover:bg-slate-800/30">
+                    <td className="py-3 px-3">
+                      <button onClick={() => { setSelId(h.stock_id); setTab('terminal'); }} className="text-left">
+                        <span className="font-bold text-cyan-400 text-sm">{h.stock_id}</span><br/>
+                        <span className="text-[10px] text-slate-500 font-sans">{h.company_name}</span>
+                      </button>
+                    </td>
+                    <td className="py-3 px-3 text-right text-white font-semibold">{h.shares_held}</td>
+                    <td className="py-3 px-3 text-right text-slate-400">${fmt(h.avg_buy_price)}</td>
+                    <td className="py-3 px-3 text-right text-white">${fmt(h.current_price)}</td>
+                    <td className="py-3 px-3 text-right text-white font-semibold">${fmt(h.current_value)}</td>
+                    <td className={`py-3 px-3 text-right font-semibold ${up ? 'text-emerald-400' : 'text-rose-400'}`}>
+                      {up ? '+' : ''}${fmt(h.unrealized_pnl)}
+                      <br/><span className="text-[10px]">({up ? '+' : ''}{fmt(h.pnl_pct)}%)</span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {orders && orders.length > 0 && (
+        <div className="card p-5 border border-amber-900/40 bg-amber-950/10">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+            <h3 className="font-semibold text-white text-sm">
+              <i className="fa-solid fa-hourglass-half text-amber-400 mr-1.5"></i>
+              Open Orders Pending Match ({orders.length})
+            </h3>
+            <span className="text-[11px] text-slate-400">
+              Orders enter your portfolio automatically once a counterparty matches them
+            </span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs font-mono">
+              <thead>
+                <tr className="border-b border-slate-800 text-slate-500 uppercase text-[10px]">
+                  <th className="text-left py-2 px-2">Order ID</th>
+                  <th className="text-left py-2 px-2">Stock</th>
+                  <th className="text-left py-2 px-2">Side</th>
+                  <th className="text-left py-2 px-2">Type</th>
+                  <th className="text-right py-2 px-2">Price</th>
+                  <th className="text-right py-2 px-2">Fill Progress</th>
+                  <th className="text-center py-2 px-2">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {orders.map(o => (
+                  <tr key={o.order_id} className="border-b border-slate-800/50">
+                    <td className="py-2 px-2 text-slate-500">#{o.order_id}</td>
+                    <td className="py-2 px-2 text-white font-semibold">{o.stock_id}</td>
+                    <td className={`py-2 px-2 font-semibold ${o.order_type === 'BUY' ? 'text-emerald-400' : 'text-rose-400'}`}>{o.order_type}</td>
+                    <td className="py-2 px-2 text-slate-400">{o.price_type}</td>
+                    <td className="py-2 px-2 text-right text-slate-300">${fmt(o.price)}</td>
+                    <td className="py-2 px-2 text-right text-amber-300 font-semibold">
+                      {o.filled_qty}/{o.quantity} ({o.status})
+                    </td>
+                    <td className="py-2 px-2 text-center">
+                      <button onClick={() => onCancel(o.order_id)} className="btn px-2 py-1 bg-rose-900/30 hover:bg-rose-900/50 text-rose-300 text-[11px]">
+                        Cancel Order
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
-      );
+      )}
+    </div>
+  );
+}
+
+// ─── ANALYTICS ──────────────────────────────────────────────
+function Analytics({ sel }) {
+  const [sub, setSub] = useState('window');
+  const [gainers, setGainers] = useState([]);
+  const [rolling, setRolling] = useState([]);
+  const [logs, setLogs] = useState([]);
+
+  useEffect(() => {
+    let cancel = false;
+    async function load() {
+      try {
+        const [g, r] = await Promise.all([
+          api('/analytics/gainers').catch(() => []),
+          api(`/analytics/rolling/${sel.stock_id}?limit=40`).catch(() => [])
+        ]);
+        if (!cancel) { setGainers(g); setRolling(r); }
+      } catch {}
     }
+    load();
+    const iv = setInterval(load, 5000);
+    return () => { cancel = true; clearInterval(iv); };
+  }, [sel.stock_id]);
 
-    // ═══════════════════════════════════════════════════════════
-    //  ANALYTICS VIEW
-    // ═══════════════════════════════════════════════════════════
-    function AnalyticsView({ db, sel }) {
-      const [subTab,setSubTab]=useState('window');
-      const {gainers}=db.queryRank();
-      const rollingData=db.queryRollingAvg(sel.id);
+  useEffect(() => {
+    let cancel = false;
+    async function loadLogs() {
+      try {
+        const l = await api('/logs?limit=100');
+        if (!cancel) setLogs(l);
+      } catch {}
+    }
+    loadLogs();
+    const iv = setInterval(loadLogs, 2000);
+    return () => { cancel = true; clearInterval(iv); };
+  }, []);
 
-      return(
-        <div className="space-y-6">
-          <div className="glass glass-hover rounded-2xl p-6 shadow-xl flex flex-wrap items-center justify-between gap-4">
-            <div className="flex items-center space-x-3">
-              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-purple-500/20 to-cyan-500/20 border border-purple-500/20 flex items-center justify-center">
-                <i className="fa-solid fa-terminal text-purple-400 text-xl"></i>
-              </div>
-              <div>
-                <h2 className="text-xl font-black text-white tracking-tight">PostgreSQL Analytics Engine</h2>
-                <p className="text-xs text-slate-500">Window Functions (RANK, LAG, AVG OVER), Row Locks & Triggers</p>
-              </div>
+  return (
+    <div className="space-y-5">
+      <div className="card p-4 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="font-bold text-white">PostgreSQL Analytics</h2>
+          <p className="text-xs text-slate-500">Window functions and transaction log</p>
+        </div>
+        <div className="flex bg-slate-900 rounded-lg p-1 text-xs">
+          <button onClick={() => setSub('window')}
+            className={`px-3 py-1.5 rounded-md ${sub === 'window' ? 'bg-purple-600 text-white' : 'text-slate-400'}`}>Window Functions</button>
+          <button onClick={() => setSub('logs')}
+            className={`px-3 py-1.5 rounded-md ${sub === 'logs' ? 'bg-emerald-600 text-white' : 'text-slate-400'}`}>Execution Log ({logs.length})</button>
+        </div>
+      </div>
+
+      {sub === 'window' ? (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="card p-5">
+            <div className="flex justify-between items-center mb-3">
+              <h3 className="font-semibold text-white text-sm">
+                <i className="fa-solid fa-trophy text-amber-400 mr-1.5"></i>Top Gainers
+              </h3>
+              <span className="text-[10px] font-mono text-purple-400">RANK() OVER</span>
             </div>
-            <div className="flex bg-slate-900/50 p-1 rounded-xl border border-slate-800/60 font-mono text-xs">
-              <button onClick={()=>setSubTab('window')} className={`px-4 py-2 rounded-lg transition-all ${subTab==='window'?'bg-purple-500/15 text-purple-300 font-bold border border-purple-500/30':'text-slate-500'}`}>
-                <i className="fa-solid fa-table-cells mr-1.5"></i>Window Functions
-              </button>
-              <button onClick={()=>setSubTab('logs')} className={`px-4 py-2 rounded-lg transition-all ${subTab==='logs'?'bg-emerald-500/15 text-emerald-300 font-bold border border-emerald-500/30':'text-slate-500'}`}>
-                <i className="fa-solid fa-terminal mr-1.5"></i>Execution Logs ({db.logs.length})
-              </button>
-            </div>
+            <table className="w-full text-xs font-mono">
+              <thead>
+                <tr className="border-b border-slate-800 text-slate-500 uppercase text-[10px]">
+                  <th className="text-left py-2 px-2">Rank</th>
+                  <th className="text-left py-2 px-2">Symbol</th>
+                  <th className="text-right py-2 px-2">Price</th>
+                  <th className="text-right py-2 px-2">Change</th>
+                </tr>
+              </thead>
+              <tbody>
+                {gainers.map(g => (
+                  <tr key={g.stock_id} className="border-b border-slate-800/50">
+                    <td className="py-2 px-2 text-slate-400">#{g.gainer_rank}</td>
+                    <td className="py-2 px-2 text-white font-semibold">{g.stock_id}</td>
+                    <td className="py-2 px-2 text-right text-white">${fmt(g.current_price)}</td>
+                    <td className={`py-2 px-2 text-right font-semibold ${g.pct_change >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                      {g.pct_change >= 0 ? '+' : ''}{fmt(g.pct_change)}%
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
 
-          {subTab==='window' ? (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div className="glass glass-hover rounded-2xl p-6 shadow-xl">
-                <div className="flex justify-between items-center mb-4">
-                  <h3 className="font-bold text-white flex items-center space-x-2"><i className="fa-solid fa-trophy text-amber-400 text-sm"></i><span>Top Gainers — RANK() OVER</span></h3>
-                  <span className="text-[9px] font-mono bg-purple-950/60 text-purple-400 px-2 py-0.5 rounded-lg border border-purple-800/40">RANK() OVER (ORDER BY pct_change DESC)</span>
-                </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left font-mono text-xs">
-                    <thead><tr className="border-b border-slate-800/60 text-slate-500 uppercase text-[10px]">
-                      <th className="py-2.5 px-3">Rank</th><th className="py-2.5 px-3">Symbol</th><th className="py-2.5 px-3 text-right">Price</th><th className="py-2.5 px-3 text-right">Change</th>
-                    </tr></thead>
-                    <tbody className="divide-y divide-slate-800/40">
-                      {gainers.map((g,i)=>(
-                        <tr key={g.id} className="hover:bg-slate-800/20 transition-all slide-up" style={{animationDelay:`${i*60}ms`}}>
-                          <td className="py-2.5 px-3">
-                            <span className={`inline-flex items-center justify-center w-7 h-7 rounded-lg font-black text-[11px] ${
-                              g.rankGainer===1?'bg-amber-500/20 text-amber-300 border border-amber-500/30 shadow shadow-amber-500/10':
-                              g.rankGainer<=3?'bg-slate-800/80 text-slate-200 border border-slate-700':'bg-slate-900/60 text-slate-400 border border-slate-800/60'
-                            }`}>#{g.rankGainer}</span>
-                          </td>
-                          <td className="py-2.5 px-3">
-                            <div className="flex items-center space-x-2">
-                              <i className={`fa-solid ${STOCK_ICONS[g.id]||'fa-chart-simple'} text-[10px]`} style={{color:STOCK_COLORS[g.id]}}></i>
-                              <span className="font-bold text-white">{g.id}</span>
-                            </div>
-                          </td>
-                          <td className="py-2.5 px-3 text-right font-bold text-white">${g.price.toFixed(2)}</td>
-                          <td className={`py-2.5 px-3 text-right font-bold ${g.pctChange>=0?'text-emerald-400':'text-rose-400'}`}>
-                            {g.pctChange>=0?'+':''}{g.pctChange.toFixed(2)}%
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              <div className="glass glass-hover rounded-2xl p-6 shadow-xl">
-                <div className="flex justify-between items-center mb-4">
-                  <h3 className="font-bold text-white flex items-center space-x-2"><i className="fa-solid fa-wave-square text-cyan-400 text-sm"></i><span>Rolling Averages — {sel.id}</span></h3>
-                  <span className="text-[9px] font-mono bg-cyan-950/60 text-cyan-400 px-2 py-0.5 rounded-lg border border-cyan-800/40">AVG() & LAG() OVER</span>
-                </div>
-                <div className="max-h-[340px] overflow-y-auto">
-                  <table className="w-full text-left font-mono text-xs">
-                    <thead className="sticky top-0 bg-slate-900/90 backdrop-blur border-b border-slate-800"><tr className="text-slate-500 uppercase text-[10px]">
-                      <th className="py-2.5 px-3">Time</th><th className="py-2.5 px-3 text-right">Price</th><th className="py-2.5 px-3 text-right">LAG Δ</th><th className="py-2.5 px-3 text-right">MA-5</th>
-                    </tr></thead>
-                    <tbody className="divide-y divide-slate-800/40">
-                      {rollingData.slice().reverse().map((p,i)=>(
-                        <tr key={i} className="hover:bg-slate-800/20 transition-all">
-                          <td className="py-2 px-3 text-slate-500">{p.timestamp}</td>
-                          <td className="py-2 px-3 text-right font-bold text-white">${p.price.toFixed(2)}</td>
-                          <td className={`py-2 px-3 text-right font-bold ${p.lagDiff>=0?'text-emerald-400':'text-rose-400'}`}>{p.lagDiff>=0?'+':''}{p.lagDiff.toFixed(2)}</td>
-                          <td className="py-2 px-3 text-right font-bold text-cyan-300">${p.ma5.toFixed(2)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+          <div className="card p-5">
+            <div className="flex justify-between items-center mb-3">
+              <h3 className="font-semibold text-white text-sm">
+                <i className="fa-solid fa-wave-square text-cyan-400 mr-1.5"></i>Rolling Averages — {sel.stock_id}
+              </h3>
+              <span className="text-[10px] font-mono text-cyan-400">AVG() · LAG()</span>
             </div>
-          ) : (
-            <div className="glass glass-hover rounded-2xl p-6 shadow-xl">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center space-x-2"><i className="fa-solid fa-terminal text-emerald-400"></i><h3 className="font-bold text-white font-sans">Live PostgreSQL Transaction Stream</h3></div>
-                <div className="flex items-center space-x-2"><div className="live-dot"></div><span className="text-[10px] text-slate-500 font-mono">{db.logs.length} entries</span></div>
-              </div>
-              <div className="bg-[#040609] border border-slate-800/60 rounded-xl p-4 h-[460px] overflow-y-auto space-y-1.5 font-mono text-[11px]">
-                {db.logs.map((log,i)=>{
-                  const colors={SQL:'text-cyan-300 bg-cyan-950/60 border-cyan-800/40',TRIGGER:'text-purple-300 bg-purple-950/60 border-purple-800/40',TRANSACTION:'text-emerald-300 bg-emerald-950/60 border-emerald-800/40',SYSTEM:'text-amber-300 bg-amber-950/60 border-amber-800/40'};
-                  const c=colors[log.type]||'text-slate-300 bg-slate-800/60 border-slate-700/40';
-                  return(
-                    <div key={log.id} className="flex items-start space-x-2 py-1 px-2 hover:bg-slate-800/20 rounded-lg transition-all slide-up" style={{animationDelay:`${i*20}ms`,animationDuration:'0.3s'}}>
-                      <span className="text-slate-600 text-[10px] flex-shrink-0 pt-0.5 w-20">{log.timestamp}</span>
-                      <span className={`px-1.5 py-0.5 text-[8px] rounded font-black uppercase tracking-widest flex-shrink-0 border ${c}`}>{log.type}</span>
-                      <span className="text-slate-300 break-all leading-relaxed flex-1">{log.message}</span>
-                    </div>
-                  );
-                })}
-              </div>
+            <div className="max-h-[340px] overflow-y-auto">
+              <table className="w-full text-xs font-mono">
+                <thead className="sticky top-0 bg-[#111827] border-b border-slate-800">
+                  <tr className="text-slate-500 uppercase text-[10px]">
+                    <th className="text-left py-2 px-2">Time</th>
+                    <th className="text-right py-2 px-2">Price</th>
+                    <th className="text-right py-2 px-2">Δ</th>
+                    <th className="text-right py-2 px-2">MA-5</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rolling.slice().reverse().map((p, i) => (
+                    <tr key={i} className="border-b border-slate-800/50">
+                      <td className="py-1.5 px-2 text-slate-500">
+                        {new Date(p.recorded_at).toLocaleTimeString('en-GB', { hour12:false })}
+                      </td>
+                      <td className="py-1.5 px-2 text-right text-white">${fmt(p.price)}</td>
+                      <td className={`py-1.5 px-2 text-right ${p.lag_diff >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                        {p.lag_diff >= 0 ? '+' : ''}{fmt(p.lag_diff)}
+                      </td>
+                      <td className="py-1.5 px-2 text-right text-cyan-300">${fmt(p.ma_5)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-          )}
+          </div>
         </div>
-      );
-    }
+      ) : (
+        <div className="card p-5">
+          <h3 className="font-semibold text-white text-sm mb-3">
+            <i className="fa-solid fa-terminal text-emerald-400 mr-1.5"></i>Transaction Log
+          </h3>
+          <div className="bg-black border border-slate-800 rounded-md p-3 h-[460px] overflow-y-auto space-y-1 font-mono text-[11px]">
+            {logs.map(log => {
+              const c = { SQL:'text-cyan-300', TRIGGER:'text-purple-300', TRANSACTION:'text-emerald-300', SYSTEM:'text-amber-300' }[log.type] || 'text-slate-400';
+              return (
+                <div key={log.id} className="flex gap-2 py-0.5">
+                  <span className="text-slate-600 w-16 flex-shrink-0">{log.timestamp}</span>
+                  <span className={`w-20 flex-shrink-0 uppercase text-[9px] ${c}`}>{log.type}</span>
+                  <span className="text-slate-300 break-all">{log.message}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
-    // ═══════════════════════════════════════════════════════════
-    //  ADMIN VIEW
-    // ═══════════════════════════════════════════════════════════
-    function AdminView({ db }) {
-      const [ticker,setTicker]=useState('');
-      const [name,setName]=useState('');
-      const [price,setPrice]=useState(150);
-      const [msg,setMsg]=useState('');
+// ─── ADMIN ──────────────────────────────────────────────────
+function Admin({ stocks, refresh, toast }) {
+  const [ticker, setTicker] = useState('');
+  const [name, setName]     = useState('');
+  const [price, setPrice]   = useState(150);
+  const [users, setUsers]   = useState([]);
 
-      const submit=(e)=>{
-        e.preventDefault();
-        if(!ticker||!name)return;
-        if(db.stocks.some(s=>s.id===ticker.toUpperCase())){setMsg('Ticker already exists!');return}
-        db.addStock({id:ticker.toUpperCase().trim(),name,sector:'Technology',price:parseFloat(price),totalSupply:10000});
-        setMsg(`${ticker.toUpperCase()} listed successfully! ✓`);
-        setTicker('');setName('');
-        setTimeout(()=>setMsg(''),3000);
-      };
+  useEffect(() => {
+    let cancel = false;
+    api('/admin/users').then(u => { if (!cancel) setUsers(u); }).catch(() => {});
+    return () => { cancel = true; };
+  }, []);
 
-      return(
-        <div className="space-y-6">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+  const addStock = async (e) => {
+    e.preventDefault();
+    try {
+      await api('/stocks', { method:'POST', body:JSON.stringify({
+        stock_id: ticker.toUpperCase(), company_name: name,
+        sector:'Technology', current_price: parseFloat(price)
+      })});
+      toast('Listed', `${ticker.toUpperCase()} added`, 'SUCCESS');
+      setTicker(''); setName(''); refresh();
+    } catch (e) { toast('Failed', e.message, 'ERROR'); }
+  };
+
+  const delistStock = async (sid) => {
+    if (!window.confirm(`Delist ${sid}? This cannot be undone.`)) return;
+    try {
+      await api('/stocks/' + sid, { method:'DELETE' });
+      toast('Delisted', `${sid} removed from exchange`, 'SUCCESS');
+      refresh();
+    } catch (e) { toast('Failed', e.message, 'ERROR'); }
+  };
+
+  const shock = async (type) => {
+    try {
+      await api('/simulate/shock', { method:'POST', body:JSON.stringify({ shock_type: type }) });
+      toast('Shock Applied', type, 'SUCCESS'); refresh();
+    } catch (e) { toast('Failed', e.message, 'ERROR'); }
+  };
+
+  const verify = async () => {
+    try {
+      const rows = await api('/verify/consistency');
+      const bad  = rows.filter(r => !r.consistent);
+      if (bad.length === 0) toast('Consistency OK', 'All stocks: available + held = total_supply', 'SUCCESS');
+      else toast('Mismatch', bad.map(b => b.stock_id).join(', '), 'ERROR');
+    } catch (e) { toast('Failed', e.message, 'ERROR'); }
+  };
+
+  return (
+    <div className="space-y-5">
+      {/* ── Stats ── */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        {[
+          { l:'Listed Stocks',    v: stocks.length },
+          { l:'Available Shares', v: stocks.reduce((s, x) => s + x.available_shares, 0).toLocaleString() },
+          { l:'Exchange Volume',  v: stocks.reduce((s, x) => s + Number(x.volume || 0), 0).toLocaleString() },
+        ].map((c, i) => (
+          <div key={i} className="card p-5">
+            <div className="text-[10px] text-slate-500 uppercase font-semibold mb-1">{c.l}</div>
+            <div className="text-2xl font-bold font-mono text-cyan-300">{c.v}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* ── Stocks table with delist ── */}
+      <div className="card p-5">
+        <h3 className="font-semibold text-white mb-4">
+          <i className="fa-solid fa-list text-cyan-400 mr-1.5"></i>
+          Listed Stocks
+        </h3>
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs font-mono">
+            <thead>
+              <tr className="border-b border-slate-800 text-slate-500 uppercase text-[10px]">
+                <th className="text-left py-2 px-3">Ticker</th>
+                <th className="text-left py-2 px-3">Company</th>
+                <th className="text-right py-2 px-3">Price</th>
+                <th className="text-right py-2 px-3">Avail</th>
+                <th className="text-right py-2 px-3">Volume</th>
+                <th className="text-center py-2 px-3">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {stocks.map(s => (
+                <tr key={s.stock_id} className="border-b border-slate-800/50 hover:bg-slate-800/20">
+                  <td className="py-2 px-3 font-bold text-cyan-400">{s.stock_id}</td>
+                  <td className="py-2 px-3 text-slate-300">{s.company_name}</td>
+                  <td className="py-2 px-3 text-right text-white">${fmt(s.current_price)}</td>
+                  <td className="py-2 px-3 text-right text-slate-400">{s.available_shares}</td>
+                  <td className="py-2 px-3 text-right text-slate-400">{Number(s.volume||0).toLocaleString()}</td>
+                  <td className="py-2 px-3 text-center">
+                    <button onClick={() => delistStock(s.stock_id)}
+                      className="text-rose-400 hover:text-rose-300 text-[11px] font-semibold">
+                      Delist
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* ── Users table ── */}
+      <div className="card p-5">
+        <h3 className="font-semibold text-white mb-4">
+          <i className="fa-solid fa-users text-purple-400 mr-1.5"></i>
+          All Users
+        </h3>
+        {users.length === 0 ? (
+          <p className="text-slate-500 text-xs text-center py-4">Loading...</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs font-mono">
+              <thead>
+                <tr className="border-b border-slate-800 text-slate-500 uppercase text-[10px]">
+                  <th className="text-left py-2 px-3">User</th>
+                  <th className="text-left py-2 px-3">Role</th>
+                  <th className="text-right py-2 px-3">Cash</th>
+                  <th className="text-right py-2 px-3">Portfolio</th>
+                  <th className="text-right py-2 px-3">Orders</th>
+                  <th className="text-right py-2 px-3">Trades</th>
+                </tr>
+              </thead>
+              <tbody>
+                {users.map(u => (
+                  <tr key={u.user_id} className="border-b border-slate-800/50 hover:bg-slate-800/20">
+                    <td className="py-2 px-3">
+                      <span className="text-white font-semibold">{u.username}</span>
+                      <br/><span className="text-slate-600 text-[10px]">{u.email}</span>
+                    </td>
+                    <td className="py-2 px-3">
+                      <span className={u.role === 'admin' ? 'text-amber-400' : 'text-slate-400'}>
+                        {u.role}
+                      </span>
+                    </td>
+                    <td className="py-2 px-3 text-right text-emerald-400">${fmt(u.cash_balance)}</td>
+                    <td className="py-2 px-3 text-right text-cyan-400">${fmt(u.portfolio_value)}</td>
+                    <td className="py-2 px-3 text-right text-slate-300">{u.total_orders}</td>
+                    <td className="py-2 px-3 text-right text-slate-300">{u.total_trades}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* ── Add Stock + Shock ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="card p-5">
+          <h3 className="font-semibold text-white mb-4">
+            <i className="fa-solid fa-plus-circle text-cyan-400 mr-1.5"></i>List New Stock
+          </h3>
+          <form onSubmit={addStock} className="space-y-3 text-xs font-mono">
+            <input value={ticker} onChange={e => setTicker(e.target.value)} placeholder="Ticker (e.g. AMD)" required
+              className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-white uppercase focus:outline-none focus:border-cyan-500" />
+            <input value={name} onChange={e => setName(e.target.value)} placeholder="Company Name" required
+              className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-white focus:outline-none focus:border-cyan-500" />
+            <input type="number" value={price} onChange={e => setPrice(e.target.value)} placeholder="Price ($)" required
+              className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-white focus:outline-none focus:border-cyan-500" />
+            <button type="submit"
+              className="btn w-full py-2.5 bg-cyan-600 hover:bg-cyan-700 text-white font-bold uppercase">List</button>
+          </form>
+        </div>
+
+        <div className="card p-5">
+          <h3 className="font-semibold text-white mb-4">
+            <i className="fa-solid fa-explosion text-amber-400 mr-1.5"></i>Market Shock
+          </h3>
+          <div className="grid grid-cols-3 gap-3 mb-4">
             {[
-              {label:'Exchange Volume',value:db.stocks.reduce((s,x)=>s+x.volume,0).toLocaleString()+' shares',icon:'fa-chart-bar',color:'text-cyan-400',bg:'from-cyan-500/10 to-blue-500/10'},
-              {label:'Trades Executed',value:db.trades.length,icon:'fa-bolt',color:'text-emerald-400',bg:'from-emerald-500/10 to-green-500/10'},
-              {label:'Active Locks',value:db.activeLocks.size,icon:'fa-lock',color:'text-amber-400',bg:'from-amber-500/10 to-orange-500/10'}
-            ].map((c,i)=>(
-              <div key={i} className={`glass glass-hover rounded-2xl p-5 shadow-xl bg-gradient-to-br ${c.bg}`}>
-                <div className="flex justify-between items-center mb-1"><span className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">{c.label}</span><i className={`fa-solid ${c.icon} ${c.color}`}></i></div>
-                <div className={`text-2xl font-black font-mono ${c.color}`}>{c.value}</div>
-              </div>
+              { t:'BULL',  l:'Bull +8%',   c:'bg-emerald-600/20 hover:bg-emerald-600/40 border-emerald-700 text-emerald-300' },
+              { t:'CRASH', l:'Crash -10%', c:'bg-rose-600/20 hover:bg-rose-600/40 border-rose-700 text-rose-300' },
+              { t:'SPIKE', l:'Spike',      c:'bg-amber-600/20 hover:bg-amber-600/40 border-amber-700 text-amber-300' },
+            ].map(s => (
+              <button key={s.t} onClick={() => shock(s.t)}
+                className={`btn p-4 border text-xs font-bold ${s.c}`}>{s.l}</button>
             ))}
           </div>
+          <div className="border-t border-slate-800 pt-4">
+            <button onClick={verify}
+              className="btn w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs">
+              <i className="fa-solid fa-check-circle mr-1.5"></i>Run Consistency Check
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="glass glass-hover rounded-2xl p-6 shadow-xl">
-              <div className="flex items-center space-x-2 mb-4 pb-3 border-b border-slate-800/60"><i className="fa-solid fa-plus-circle text-cyan-400"></i><h3 className="font-bold text-white">List New Stock</h3></div>
-              {msg&&<div className="mb-3 p-3 bg-cyan-950/60 border border-cyan-800/40 text-cyan-300 rounded-xl text-xs font-mono">{msg}</div>}
-              <form onSubmit={submit} className="space-y-3 font-mono text-xs">
-                <input type="text" placeholder="Ticker (e.g. AMD)" value={ticker} onChange={e=>setTicker(e.target.value)} className="w-full bg-slate-900/60 border border-slate-700/60 rounded-xl px-3 py-2 text-white uppercase focus:outline-none focus:border-cyan-500" required />
-                <input type="text" placeholder="Company Name" value={name} onChange={e=>setName(e.target.value)} className="w-full bg-slate-900/60 border border-slate-700/60 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-cyan-500" required />
-                <input type="number" placeholder="Price ($)" value={price} onChange={e=>setPrice(e.target.value)} className="w-full bg-slate-900/60 border border-slate-700/60 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-cyan-500" required />
-                <button type="submit" className="w-full py-2.5 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-black rounded-xl uppercase tracking-wider text-xs transition-all active:scale-[0.97] shadow-lg shadow-cyan-600/20">
-                  <i className="fa-solid fa-rocket mr-1.5"></i>List on Exchange
-                </button>
-              </form>
-            </div>
+// ─── TOAST ──────────────────────────────────────────────────
+function Toast({ data, close }) {
+  const bc = { SUCCESS:'border-l-emerald-500', ERROR:'border-l-rose-500', INFO:'border-l-cyan-500' }[data.type] || 'border-l-slate-500';
+  return (
+    <div className={`fixed bottom-5 right-5 z-50 max-w-sm w-full card p-4 border-l-4 ${bc}`}>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h4 className="font-semibold text-sm text-white">{data.title}</h4>
+          <p className="text-xs text-slate-400 mt-0.5">{data.msg}</p>
+        </div>
+        <button onClick={close} className="text-slate-500 hover:text-white"><i className="fa-solid fa-xmark"></i></button>
+      </div>
+    </div>
+  );
+}
 
-            <div className="glass glass-hover rounded-2xl p-6 shadow-xl flex flex-col justify-between">
-              <div>
-                <div className="flex items-center space-x-2 mb-4 pb-3 border-b border-slate-800/60"><i className="fa-solid fa-explosion text-amber-400"></i><h3 className="font-bold text-white">Market Shock Simulator</h3></div>
-                <p className="text-xs text-slate-500 mb-4 leading-relaxed">Inject macroeconomic events across all PostgreSQL stock records.</p>
-                <div className="grid grid-cols-3 gap-3">
-                  {[
-                    {type:'BULL',icon:'fa-arrow-trend-up',label:'+8% Bull Rally',color:'emerald'},
-                    {type:'CRASH',icon:'fa-arrow-trend-down',label:'-10% Flash Crash',color:'rose'},
-                    {type:'SPIKE',icon:'fa-bolt',label:'Random Spike',color:'amber'}
-                  ].map(s=>(
-                    <button key={s.type} onClick={()=>db.marketShock(s.type)}
-                      className={`p-4 bg-${s.color}-950/40 hover:bg-${s.color}-900/60 border border-${s.color}-700/40 text-${s.color}-300 rounded-xl font-mono text-xs flex flex-col items-center justify-center space-y-2 transition-all active:scale-95 shadow hover:shadow-${s.color}-500/10`}>
-                      <i className={`fa-solid ${s.icon} text-${s.color}-400 text-xl`}></i>
-                      <span className="font-bold">{s.label}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="mt-4 p-3 bg-slate-900/40 border border-slate-800/40 rounded-xl text-[10px] text-slate-500 font-mono flex justify-between items-center">
-                <span>Exchange: ONLINE</span>
-                <span className="text-emerald-400 font-bold flex items-center"><div className="live-dot mr-1.5"></div>100% Uptime</span>
-              </div>
-            </div>
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error, errorInfo) {
+    console.error('ErrorBoundary caught:', error, errorInfo);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen flex items-center justify-center p-6 text-center">
+          <div className="card p-8 max-w-lg">
+            <i className="fa-solid fa-triangle-exclamation text-rose-400 text-3xl mb-3"></i>
+            <h2 className="text-xl font-bold text-white mb-2">Interface Error</h2>
+            <p className="text-xs text-rose-300 font-mono mb-4">{this.state.error?.message || 'An unexpected rendering error occurred'}</p>
+            <button onClick={() => { localStorage.clear(); window.location.reload(); }}
+              className="btn px-4 py-2 bg-cyan-600 text-white text-xs">Reset Cache & Reload</button>
           </div>
         </div>
       );
     }
+    return this.props.children;
+  }
+}
 
-    // ═══════════════════════════════════════════════════════════
-    //  RENDER
-    // ═══════════════════════════════════════════════════════════
-    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
-  </script>
+ReactDOM.createRoot(document.getElementById('root')).render(
+  <ErrorBoundary>
+    <App />
+  </ErrorBoundary>
+);
+</script>
 </body>
 </html>
